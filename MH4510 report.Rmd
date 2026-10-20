@@ -1,0 +1,48 @@
+---
+title: "MH4510 Group Project: Report"
+subtitle: "Haze Prediction"
+author: |
+  Leong Yi Jing \hfill U2330421C \
+  Charlene Tooh Xin Yi
+  Dao Le Bao Ngoc
+  Goh Zheqi Amanda
+  Ng Li Xin
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    latex_engine: xelatex
+---
+
+# Introduction
+Thousands of blazes that have erupted in 2026 can be acrued to human activity, whether intentionally or accidental. A common reason is to clear land. Using fire is an inexpensive and fast way to prepare the ground for agriculture and plantations. The fires are also used to dispose of waste, especially in places with non-existent rubbish collection. Many fire hot spots also overlap with peatlands which are naturally wet ecosystems that become highly flammable when drained for plantation. With an exceptionally powerful El Nino this year, the fires can grow out of control rapidly, especially during prolonged dry spells. This has resulted in hazardous smoke spreading across the region. The smoke was then carried northwards by winds from the south, affecting neighbouring countries including Singapore. Transboundary haze pose significant environmental and public health threats to the region. With the haze-belching fires in Kalimantan and Sumatra driving Pollutant Standards Index (PSI) levels up, monitoring and predicting the magnitude of pollutants in the air across Singapore is critical for public health advisories (Rayda, 2026) (Mungcal et al., 2026). This project aims to accurately forecast regional air quality pollution levels across Singapore by leveraging on temporal dependencies and cross-station spatial patterns. By providing the framework, it would help deliver insights on the public health advisories such as outdoor activity restrictions, which ultimately mitigates acute respiratory and cardiovascular health risks. 
+## Literature Review 
+Traditional air quality forecasting approaches such as Multiple Linear Regression mainly rely on linear assumptions and have long served as standard baseline for air quality (Abdullah et al., 2020). Conversely, Machine Learning techniques account for non-linear relationships and time-lagged variables. Machine Leaning modeling frameworks such as Random Forest (RF), Artificial Neural Network (ANN) and Long Short-Term Memory (LSTM) have started to emerge as a way to effectively predict air quality (Palanichamy et al., 2022). Thus, this project investigates several machine learning algorithms for forecasting haze levels in Singapore, ultimately providing relevant information to responsible parties which allows them to mitigate and plan precautionary measures. 
+# Data
+## Data Preparation
+
+# Exploratory Data Analysis (EDA)
+##Regional PSI Trends Across Singapore
+
+# Methodologies 
+## Elastic Net Regression (Baseline Regularized Model)
+## Random Forest
+## VARX Spatio-Temporal Model
+## Conformal Coverage
+## TBC
+
+# Results
+## Model Evaluation and Comparison 
+
+#Discussion
+## Key Findings
+## Limitations and Future Work 
+
+# Conclusion 
+
+# References
+## Rayda, N. (2026, September 24). ‘Fire after fire’: What Sumatra reveals about Indonesia’s recurring haze problem. CNA. https://www.channelnewsasia.com/asia/indonesia-haze-wildfires-sumatra-human-activity-crackdown-6403751
+## Mungcal, A., Chua, C., Quendalyn, G., Duhalde, M., Xun, L. E., Begum, S., Adeline, S., Tan, W., & Sin, Y. S. (2026, October 19). The haze is back in Singapore. How does it compare with past occurrences? The Straits Times. https://www.straitstimes.com/multimedia/graphics/2026/09/singapore-haze-2026/index.html
+## Abdullah, S., Napi, N. N. L. M., Ahmed, A. N., Mansor, W. N. W., Mansor, A. A., Ismail, M., Abdullah, A. M., & Ramly, Z. T. A. (2020). Development of Multiple Linear Regression for Particulate Matter (PM10) Forecasting during Episodic Transboundary Haze Event in Malaysia. Atmosphere, 11(3), 289. https://doi.org/10.3390/atmos11030289
+## Palanichamy, N., Haw, S. C., S, S., Murugan, R., & Govindasamy, K. (2022). Machine learning methods to predict particulate matter PM 2.5. F1000Research, 11, 406. https://doi.org/10.12688/f1000research.73166.1
