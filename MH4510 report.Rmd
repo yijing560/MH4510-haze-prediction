@@ -28,6 +28,56 @@ Traditional air quality forecasting approaches such as Multiple Linear Regressio
 # Methodologies 
 ## Elastic Net Regression (Baseline Regularized Model)
 ## Random Forest
+Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra and Kalimantan, together with the Sumatra smoke-transport interaction term. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The data are split by time (training: 1 August to 10 October 2019; testing: 11 to 31 October 2019) to avoid leaking future observations into training. As this split is deterministic, all models in the group are evaluated on the same test set. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and fire/smoke transport to assess whether local persistence or upstream burning dominates as the horizon lengthens. Forecasts are compared against the elastic net and a persistence benchmark (forecast = current west PSI) using RMSE, MAE and $R^2$.
+
+## VARX Spatio-Temporal Model
+## Conformal Coverage
+## TBC
+
+# Results
+## Model Evaluation and Comparison 
+### Forecast Accuracy at $t+1$ and $t+6$ Hours
+The table below compares the Random Forest against the elastic net and a persistence benchmark (forecast = current west PSI) on the test set (11 to 31 October 2019). For a like-for-like comparison, the elastic net was refitted on the same time-based split and feature set, so its figures here may differ from the Phase 2 baseline, which uses lagged PSI only.
+
+| Horizon | Model | RMSE | MAE | $R^2$ |
+|---|---|---|---|---|
+| $t+1$ hr | Persistence | 6.45 | 4.90 | 0.462 |
+| $t+1$ hr | Elastic Net | 5.79 | 4.62 | 0.493 |
+| $t+1$ hr | Random Forest | 6.23 | 5.02 | 0.443 |
+| $t+6$ hr | Persistence | 9.18 | 7.28 | 0.122 |
+| $t+6$ hr | Elastic Net | 7.87 | 6.15 | 0.152 |
+| $t+6$ hr | Random Forest | 13.30 | 9.87 | 0.030 |
+
+At the $t+1$ hr horizon, the elastic net achieved the lowest error (RMSE 5.79). The Random Forest (RMSE 6.23) offered only a small improvement over the persistence benchmark (RMSE 6.45) and did not beat the linear baseline, and its MAE (5.02) was slightly worse than persistence (4.90). All three models explained less than half of the variance ($R^2 \le 0.49$).
+
+Forecast accuracy deteriorated for every model at $t+6$ hr. The elastic net remained the best model (RMSE 7.87, $R^2$ 0.15), while the Random Forest performed worst (RMSE 13.30, $R^2$ 0.03), doing worse than the persistence benchmark. Figure 1 shows why: the Random Forest tracks actual PSI reasonably well at $t+1$ hr, but at $t+6$ hr it produces large spurious spikes of about 50 PSI in mid and late October (around 13 to 16 October and 24 to 26 October), when observed PSI stayed near 20.
+
+![Random Forest forecasts vs actual west PSI on the test period](forecast_plot.png)
+
+### Permutation Variable Importance
+Permutation importance was computed for each horizon as the percentage increase in MSE when a predictor is shuffled. To assess whether local persistence or upstream drivers dominate, predictors were grouped into local (west) lags, other-region lags, wind, and fire/smoke transport (see table below, Figure 2). Because the groups contain different numbers of variables, the table also reports the average importance per variable.
+
+| Horizon | Group | Share of total importance | Avg. importance per variable |
+|---|---|---|---|
+| $t+1$ hr | Local (west) lags | 21.1% | 10.8 |
+| $t+1$ hr | Other-region lags | 61.7% | 7.9 |
+| $t+1$ hr | Wind | 5.5% | 5.6 |
+| $t+1$ hr | Fire / smoke transport | 11.8% | 7.3 |
+| $t+6$ hr | Local (west) lags | 13.6% | 8.9 |
+| $t+6$ hr | Other-region lags | 51.2% | 8.3 |
+| $t+6$ hr | Wind | 10.4% | 13.6 |
+| $t+6$ hr | Fire / smoke transport | 24.8% | 19.4 |
+
+![Share of permutation importance by predictor group](group_plot.png)
+
+At $t+1$ hr, lagged PSI readings account for most of the importance (local lags 21.1% and other-region lags 61.7%), and local lags have the highest importance per variable. This indicates that short-term forecasts are driven mainly by recent PSI persistence and cross-station spatial patterns. At $t+6$ hr, the share of local lags falls to 13.6%, while the shares of fire/smoke transport (11.8% to 24.8%) and wind (5.5% to 10.4%) roughly double, and each fire variable becomes more than twice as important as a typical lag variable.
+
+![Permutation importance of the top 15 predictors](importance_plot.png)
+
+Figure 3 shows the top 15 predictors at each horizon. At $t+1$ hr, the most important variables are the most recent PSI readings across all regions (e.g. `Lag_west_0`, `Lag_north_0`, `Lag_central_0`), with fire variables ranking lower. At $t+6$ hr the ranking changes: Sumatra and Kalimantan fire radiative power (`daily_frp_Sumatra`, `daily_frp_Kalimantan`), the hotspot counts, the smoke-transport term, and the north-south wind component (`wind_w`) all enter the top eight, together with only two PSI lags (`Lag_east_0`, `Lag_west_1`). Upstream burning and southerly wind transport therefore become the dominant signals as the horizon lengthens, while local persistence fades.
+
+However, higher importance does not imply better forecasts. The $t+6$ hr Random Forest, which relies most on the fire variables, generalised worst to the October test period. A possible reason is that the fire variables are daily values that are constant within each day, so the forest may have used them to memorise the training days rather than learn a relationship that holds in October. Future work could use lagged or smoothed fire features and time-series cross-validation to reduce this.
+
 ## VARX Spatio-Temporal Model
 ## Conformal Coverage
 ## TBC
@@ -42,7 +92,12 @@ Traditional air quality forecasting approaches such as Multiple Linear Regressio
 # Conclusion 
 
 # References
-## Rayda, N. (2026, September 24). ‘Fire after fire’: What Sumatra reveals about Indonesia’s recurring haze problem. CNA. https://www.channelnewsasia.com/asia/indonesia-haze-wildfires-sumatra-human-activity-crackdown-6403751
-## Mungcal, A., Chua, C., Quendalyn, G., Duhalde, M., Xun, L. E., Begum, S., Adeline, S., Tan, W., & Sin, Y. S. (2026, October 19). The haze is back in Singapore. How does it compare with past occurrences? The Straits Times. https://www.straitstimes.com/multimedia/graphics/2026/09/singapore-haze-2026/index.html
-## Abdullah, S., Napi, N. N. L. M., Ahmed, A. N., Mansor, W. N. W., Mansor, A. A., Ismail, M., Abdullah, A. M., & Ramly, Z. T. A. (2020). Development of Multiple Linear Regression for Particulate Matter (PM10) Forecasting during Episodic Transboundary Haze Event in Malaysia. Atmosphere, 11(3), 289. https://doi.org/10.3390/atmos11030289
-## Palanichamy, N., Haw, S. C., S, S., Murugan, R., & Govindasamy, K. (2022). Machine learning methods to predict particulate matter PM 2.5. F1000Research, 11, 406. https://doi.org/10.12688/f1000research.73166.1
+Rayda, N. (2026, September 24). ‘Fire after fire’: What Sumatra reveals about Indonesia’s recurring haze problem. CNA. https://www.channelnewsasia.com/asia/indonesia-haze-wildfires-sumatra-human-activity-crackdown-6403751
+
+Mungcal, A., Chua, C., Quendalyn, G., Duhalde, M., Xun, L. E., Begum, S., Adeline, S., Tan, W., & Sin, Y. S. (2026, October 19). The haze is back in Singapore. How does it compare with past occurrences? The Straits Times. https://www.straitstimes.com/multimedia/graphics/2026/09/singapore-haze-2026/index.html
+
+Abdullah, S., Napi, N. N. L. M., Ahmed, A. N., Mansor, W. N. W., Mansor, A. A., Ismail, M., Abdullah, A. M., & Ramly, Z. T. A. (2020). Development of Multiple Linear Regression for Particulate Matter (PM10) Forecasting during Episodic Transboundary Haze Event in Malaysia. Atmosphere, 11(3), 289. https://doi.org/10.3390/atmos11030289
+
+Palanichamy, N., Haw, S. C., S, S., Murugan, R., & Govindasamy, K. (2022). Machine learning methods to predict particulate matter PM 2.5. F1000Research, 11, 406. https://doi.org/10.12688/f1000research.73166.1
+
+Breiman, L. (2001). Random forests. Machine Learning, 45(1), 5–32. https://doi.org/10.1023/A:1010933404324
