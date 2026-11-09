@@ -133,7 +133,14 @@ ggplot(data = long_data, aes(x = Timestamp, y = PSI_Level, group = location, col
   ) +
   theme_minimal()
 
-
+# Create a clean summary table for regional PSI levels
+regional_summary <- long_data %>% 
+  group_by(location) %>% 
+  summarise(
+    Mean_PSI = round(mean(PSI_Level, na.rm = TRUE), 1),
+    Max_PSI = max(PSI_Level, na.rm = TRUE)
+  )
+print(regional_summary)
 # ==============================================================================
 # PART 2: PHASE 2 - ELASTIC NET BASELINE MODEL & LAGGING (TIME-BASED SPLIT)
 # ==============================================================================
