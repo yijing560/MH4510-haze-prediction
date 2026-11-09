@@ -393,7 +393,170 @@ map_dfr(phase3_fit, "test_df") %>%
        x = "Timestamp", y = "PSI Level", colour = NULL) +
   theme_minimal()
 
+# ==============================================================================
+# PHASE 4 -  VECTOR AUTOREGRESSIVE EXOGENOUS (VARX) SYSTEM ----
+# ==============================================================================
+# install.packages("vars")
+# install.packages("tseries")
+library(vars)
+library(tseries)
 
+# 1. Train/Test sets (Chronological Split) ----
+# Training set: August 1 to October 10, 2019
+# Test set: October 11 to October 31, 2019
+train_df <- master_haze_2019 %>% filter(Date <= as_date("2019-10-10"))
+test_df <- master_haze_2019 %>% filter(Date > as_date("2019-10-10"))
+cat("VARX Training observations:", nrow(train_df), "\n") # 1704
+cat("VARX Testing observations: ", nrow(test_df), "\n") # 504
+
+# Extract Endogenous Matrix Y_t (5 Singapore regional air quality series)
+Y_train <- as.matrix(train_df[, c("north", "south", "east", "west", "central")])
+Y_test <- as.matrix(test_df[, c("north", "south", "east", "west", "central")])
+
+# Extract Exogenous Matrix X_t (Wind velocity vectors & Sumatra smoke transport)
+X_train <- as.matrix(train_df[, c("wind_u", "wind_w", "daily_frp_Sumatra", 
+                                  "smoke_transport_Sumatra")])
+X_test <- as.matrix(test_df[, c("wind_u", "wind_w", "daily_frp_Sumatra", 
+                                "smoke_transport_Sumatra")])
+
+# 2. Stationarity Checks (Augmented Dickey-Fuller Test) ----
+
+apply(Y_train, 2, function(x) {
+  adf_res <- adf.test(x)
+  return(c(p_value = adf_res$p.value))
+})
+
+# 3. Optimal Lag Selection & VARX Fit ----
+
+# Determine optimal lag length (p) using AIC/BIC
+lag_selection <- VARselect(Y_train, lag.max = 10, type = "const", exogen = X_train)
+print(lag_selection$selection)
+optimal_p <- lag_selection$selection["AIC(n)"]
+cat("Selected Optimal Lag p (AIC):", optimal_p, "\n")
+
+# Fit the VARX(p) System
+varx_fit <- VAR(Y_train, p = optimal_p, type = "const", exogen = X_train)
+summary(varx_fit) # Fits linear regression equations for each region
+
+# 4. Granger Causality Tests ----
+# To test directional transmission across regions under prevailing winds, 
+#   specifically South and West due to the Southwest Monsoon
+# (To test if including historical values of X yields statistically significantly 
+#   better forecasts of Y than using historical values of $Y$ alone)
+
+# Does elevated PM2.5 in South Granger-cause spikes across other zones?
+granger_south <- causality(varx_fit, cause = "south")
+print(granger_south$Granger)
+
+# Does elevated PM2.5 in West Granger-cause spikes across other zones?
+granger_west <- causality(varx_fit, cause = "west")
+print(granger_west$Granger)
+
+# Does elevated PM2.5 in North Granger-cause spikes across other zones?
+granger_north <- causality(varx_fit, cause = "north")
+print(granger_north$Granger) 
+
+# Does elevated PM2.5 in East Granger-cause spikes across other zones?
+granger_east <- causality(varx_fit, cause = "east")
+print(granger_east$Granger)
+
+# Does elevated PM2.5 in Central Granger-cause spikes across other zones?
+granger_central <- causality(varx_fit, cause = "central")
+print(granger_central$Granger)
+
+# 5. Impulse Response Functions (IRF Simulation) ----
+# (Traces how an incoming smoke shock at the South/West diffuses across Singapore)
+
+# South
+irf_south <- irf(
+  varx_fit,
+  impulse = "south",
+  response = c("north", "south", "east", "west", "central"),
+  n.ahead = 24, # 24-hour diffusion window
+  boot = TRUE,
+  ci = 0.95
+)
+plot(irf_south, main = "Island-Wide PM2.5 Response to South Shock (24-Hour Horizon)")
+
+# West
+irf_west <- irf(
+  varx_fit,
+  impulse = "west",
+  response = c("north", "south", "east", "west", "central"),
+  n.ahead = 24, # 24-hour diffusion window
+  boot = TRUE,
+  ci = 0.95
+)
+plot(irf_west, main = "Island-Wide PM2.5 Response to West Shock (24-Hour Horizon)")
+
+# Central
+irf_north <- irf(
+  varx_fit,
+  impulse = "north",
+  response = c("north", "south", "east", "west", "central"),
+  n.ahead = 24, # 24-hour diffusion window
+  boot = TRUE,
+  ci = 0.95
+)
+plot(irf_north, main = "Island-Wide PM2.5 Response to North Shock (24-Hour Horizon)")
+
+# East
+irf_east <- irf(
+  varx_fit,
+  impulse = "east",
+  response = c("north", "south", "east", "west", "central"),
+  n.ahead = 24, # 24-hour diffusion window
+  boot = TRUE,
+  ci = 0.95
+)
+plot(irf_east, main = "Island-Wide PM2.5 Response to East Shock (24-Hour Horizon)")
+
+# Central
+irf_central <- irf(
+  varx_fit,
+  impulse = "central",
+  response = c("north", "south", "east", "west", "central"),
+  n.ahead = 24, # 24-hour diffusion window
+  boot = TRUE,
+  ci = 0.95
+)
+plot(irf_central, main = "Island-Wide PM2.5 Response to Central Shock (24-Hour Horizon)")
+
+# 6. Forecasting & Evaluation (on test set) ----
+
+# Generate air quality forecasts on test set horizon
+varx_fcst <- predict(varx_fit, n.ahead = nrow(test_df), dumvar = X_test)
+
+# Extract predicted vs actual values for West region
+pred_west_varx <- varx_fcst$fcst$west[, "fcst"]
+actual_west <- test_df$west
+
+varx_rmse <- sqrt(mean((pred_west_varx - actual_west)^2))
+varx_mae <- mean(abs(pred_west_varx - actual_west))
+varx_r2 <- cor(pred_west_varx, actual_west)^2
+
+cat("RMSE:", round(varx_rmse, 4), "\n") # 11.1688
+cat("MAE:", round(varx_mae, 4), "\n") # 8.9746
+cat("Rsquared:", round(varx_r2, 4), "\n") # 0.0309
+
+# Plot Actual vs VARX Predicted PM2.5 for West Region
+eval_df <- data.frame(
+  Timestamp = test_df$Timestamp,
+  Actual = actual_west,
+  VARX_Predicted = pred_west_varx
+)
+ggplot(eval_df, aes(x = Timestamp)) +
+  geom_line(aes(y = Actual, colour = "Actual PM2.5"), alpha = 0.8) +
+  geom_line(aes(y = VARX_Predicted, colour = "VARX Forecast"), linetype = "longdash") +
+  labs(
+    title = "VARX Model: Out-of-Sample PM2.5 Forecast (West Region)",
+    subtitle = "Evaluation Horizon: October 11 – October 31, 2019",
+    x = "Timestamp",
+    y = "PM2.5 Level (µg/m³)",
+    colour = "Legend"
+  ) +
+  scale_colour_manual(values = c("Actual PM2.5" = "black", "VARX Forecast" = "red")) +
+  theme_minimal()
 
 # ==============================================================================
 # PHASE 5: SPATIAL AUTOREGRESSIVE MODEL (SAR)
