@@ -384,3 +384,153 @@ map_dfr(phase3_fit, "test_df") %>%
   labs(title = "Random Forest Forecasts vs Actual West PSI (Test Period)",
        x = "Timestamp", y = "PSI Level", colour = NULL) +
   theme_minimal()
+
+
+
+# ==============================================================================
+# PHASE 5: SPATIAL AUTOREGRESSIVE MODEL (SAR)
+# ==============================================================================
+
+# install.packages(c("splm", "spdep"))
+library(splm)
+library(spdep)
+
+# 1. Define spatial weights matrix
+regions <- c("north", "south", "east", "west", "central")
+
+W <- matrix(0, 5, 5, dimnames = list(regions, regions))
+
+W["north", c("east", "west", "central")] <- 1
+W["south", c("east", "west", "central")] <- 1
+W["east", c("north", "south", "central")] <- 1
+W["west", c("north", "south", "central")] <- 1
+W["central", c("north", "south", "east", "west")] <- 1
+
+W <- W / rowSums(W)
+listw <- mat2listw(W, style = "W")
+
+print(W)
+
+# 2. Prepare panel data for each forecast horizon
+build_sar_data <- function(h) {
+
+  d <- master_haze_2019 %>%
+    arrange(Timestamp) %>%
+    mutate(
+      future_time = lead(Timestamp, h),
+      across(all_of(regions), ~ lead(.x, h),
+             .names = "future_{.col}")
+    ) %>%
+    filter(future_time == Timestamp + hours(h)) %>%
+    drop_na()
+
+  map_dfr(regions, function(r) {
+    tibble(
+      Timestamp = d$Timestamp,
+      target_time = d$future_time,
+      region = r,
+      target = d[[paste0("future_", r)]],
+      pm25 = d[[r]],
+      wind_u = d$wind_u,
+      wind_w = d$wind_w,
+      fire_frp = d$daily_frp_Sumatra
+    )
+  }) %>%
+    mutate(region = factor(region, levels = regions)) %>%
+    arrange(region, Timestamp)
+}
+
+# 3. Estimate OLS and SAR models
+fit_sar <- function(h) {
+
+  d <- build_sar_data(h)
+
+  train_sp <- d %>%
+    filter(target_time < ymd("2019-10-21"))
+
+  test_sp <- d %>%
+    filter(target_time >= ymd("2019-10-21"))
+
+  formula_sp <- target ~ pm25 + wind_u + wind_w +
+    fire_frp + region
+
+  # Baseline OLS
+  ols <- lm(formula_sp, data = train_sp)
+
+  # Spatial autoregressive model (Maximum Likelihood)
+  sar <- spml(
+    formula_sp,
+    data = train_sp,
+    index = c("region", "Timestamp"),
+    listw = listw,
+    model = "pooling",
+    lag = TRUE,
+    spatial.error = "none"
+  )
+
+  # 4. Predict with OLS
+  pred_ols <- predict(ols, newdata = test_sp)
+
+  # 5. Predict with SAR using spatial multiplier
+  rho <- as.numeric(sar$arcoef)
+
+  pred_sar <- test_sp %>%
+    group_split(Timestamp) %>%
+    map_dfr(function(g) {
+
+      g <- arrange(g, region)
+
+      X <- model.matrix(formula_sp, data = g)
+      xb <- as.vector(X %*% sar$coefficients)
+
+      g$prediction <- as.vector(
+        solve(diag(5) - rho * W, xb)
+      )
+
+      g
+    })
+
+  # 6. Evaluate forecasts
+  results <- tibble(
+    Horizon = paste0("t+", h, " hr"),
+    Model = c("OLS", "SAR"),
+    RMSE = c(
+      RMSE(pred_ols, test_sp$target),
+      RMSE(pred_sar$prediction, pred_sar$target)
+    ),
+    MAE = c(
+      MAE(pred_ols, test_sp$target),
+      MAE(pred_sar$prediction, pred_sar$target)
+    )
+  )
+
+  list(
+    results = results,
+    rho = rho,
+    sar_model = sar
+  )
+}
+
+# 7. Run 1-hour and 6-hour models
+phase5_fit <- map(c(1, 6), fit_sar)
+
+phase5_results <- map_dfr(phase5_fit, "results")
+print(phase5_results)
+
+# 8. Examine spatial autoregressive coefficients
+map_dbl(phase5_fit, "rho")
+
+summary(phase5_fit[[1]]$sar_model)
+summary(phase5_fit[[2]]$sar_model)
+
+# 9. Visualize forecasting performance
+ggplot(phase5_results,
+       aes(x = Horizon, y = RMSE, fill = Model)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "OLS vs Spatial Autoregressive Model",
+    subtitle = "Out-of-sample forecasting performance",
+    x = "Forecast Horizon",
+    y = "Test RMSE"
+  ) +
+  theme_minimal()
