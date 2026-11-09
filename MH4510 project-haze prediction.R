@@ -420,14 +420,12 @@ X_test <- as.matrix(test_df[, c("wind_u", "wind_w", "daily_frp_Sumatra",
                                 "smoke_transport_Sumatra")])
 
 # 2. Stationarity Checks (Augmented Dickey-Fuller Test) ----
-
 apply(Y_train, 2, function(x) {
   adf_res <- adf.test(x)
   return(c(p_value = adf_res$p.value))
 })
 
 # 3. Optimal Lag Selection & VARX Fit ----
-
 # Determine optimal lag length (p) using AIC/BIC
 lag_selection <- VARselect(Y_train, lag.max = 10, type = "const", exogen = X_train)
 print(lag_selection$selection)
@@ -443,7 +441,6 @@ summary(varx_fit) # Fits linear regression equations for each region
 #   specifically South and West due to the Southwest Monsoon
 # (To test if including historical values of X yields statistically significantly 
 #   better forecasts of Y than using historical values of $Y$ alone)
-
 # Does elevated PM2.5 in South Granger-cause spikes across other zones?
 granger_south <- causality(varx_fit, cause = "south")
 print(granger_south$Granger)
@@ -466,7 +463,6 @@ print(granger_central$Granger)
 
 # 5. Impulse Response Functions (IRF Simulation) ----
 # (Traces how an incoming smoke shock at the South/West diffuses across Singapore)
-
 # South
 irf_south <- irf(
   varx_fit,
@@ -523,7 +519,6 @@ irf_central <- irf(
 plot(irf_central, main = "Island-Wide PM2.5 Response to Central Shock (24-Hour Horizon)")
 
 # 6. Forecasting & Evaluation (on test set) ----
-
 # Generate air quality forecasts on test set horizon
 varx_fcst <- predict(varx_fit, n.ahead = nrow(test_df), dumvar = X_test)
 
