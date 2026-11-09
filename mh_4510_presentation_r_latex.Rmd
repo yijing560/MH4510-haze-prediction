@@ -93,7 +93,7 @@ input
 input 
 \end{block}
 
-\begin{block}{VARX}
+\begin{block}{Vector Autoregressive Exogenous (VARX) System}
 input 
 \end{block}
 
@@ -102,7 +102,7 @@ input
 input 
 \end{block}
 
-\begin{block}{Spatial Temporal Clustering}
+\begin{block}{Spatial Autoregressive (SAR)}
 input 
 \end{block}
 
