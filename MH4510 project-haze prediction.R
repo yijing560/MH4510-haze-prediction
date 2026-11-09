@@ -146,6 +146,7 @@ print(regional_summary)
 # ==============================================================================
 
 # A. Create Lagged Features (Using built-in dplyr::lag)
+split_date <-ymd("2019-10-21")
 lagged_obs <- function(df, L) {
   if (L == 0) {
     return(df)
