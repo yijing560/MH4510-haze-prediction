@@ -135,7 +135,7 @@ ggplot(data = long_data, aes(x = Timestamp, y = PSI_Level, group = location, col
 
 
 # ==============================================================================
-# PART 2: PHASE 2 - ELASTIC NET BASELINE MODEL & LAGGING
+# PART 2: PHASE 2 - ELASTIC NET BASELINE MODEL & LAGGING (TIME-BASED SPLIT)
 # ==============================================================================
 
 # A. Create Lagged Features (Using built-in dplyr::lag)
@@ -152,20 +152,25 @@ lagged_obs <- function(df, L) {
 # Generate 1 to 5 hour lags across all regional columns
 PSI_with_lags <- c(0, 1:5) %>%
   map_dfc(function(L) lagged_obs(master_haze_2019, L)) %>%
-  select(west, starts_with("Lag")) %>%
+  select(Timestamp, west, starts_with("Lag")) %>%
   drop_na()
 
-# B. Custom Train-Test Split (Using runif with set.seed for reproducibility)
-set.seed(42)
-ind <- runif(nrow(PSI_with_lags)) <= 0.7
-train_data <- PSI_with_lags %>% filter(ind)
-test_data  <- PSI_with_lags %>% filter(!ind)
+# B. Chronological Time-Based Train-Test Split (No random set.seed needed)
+# Training window: August 1 to October 20
+# Testing window: October 21 to October 31
+train_data <- PSI_with_lags %>% 
+  filter(Timestamp < ymd("2019-10-21")) %>% 
+  select(-Timestamp) # Remove timestamp column before modeling matrix
+
+test_data <- PSI_with_lags %>% 
+  filter(Timestamp >= ymd("2019-10-21")) %>% 
+  select(-Timestamp)
 
 cat("Dimensions of training set:", dim(train_data), "\n")
 cat("Dimensions of testing set:", dim(test_data), "\n")
 
 # C. Train Elastic Net Model using caret (5-fold CV, scaling, hyperparameter grid)
-set.seed(42)
+set.seed(42) # Keep seed for cross-fold partitioning reproducibility only
 elastic_net_model <- train(
   west ~ ., 
   data = train_data, 
@@ -189,7 +194,7 @@ test_rmse <- RMSE(predictions, test_data$west)
 test_mae  <- MAE(predictions, test_data$west)
 test_r2   <- cor(predictions, test_data$west)^2
 
-cat("--- Out-of-Sample Test Performance ---\n")
+cat("--- Out-of-Sample Test Performance (Time-Based Split) ---\n")
 cat("Test RMSE:", test_rmse, "\n")
 cat("Test MAE:", test_mae, "\n")
 cat("Test R-squared:", test_r2, "\n")
@@ -224,7 +229,7 @@ en_path_df %>%
   scale_x_log10() +
   labs(
     title = "Elastic Net Regularization Coefficient Paths",
-    subtitle = sprintf("Optimal alpha = %.2f", best_alpha),
+    subtitle = sprintf("Optimal alpha = %.2f (Chronological Split)", best_alpha),
     x = "Lambda (log scale)",
     y = "Coefficient Estimate",
     colour = "Predictor"
