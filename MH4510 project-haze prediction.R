@@ -132,7 +132,7 @@ ggplot(data = long_data, aes(x = Timestamp, y = PSI_Level, group = location, col
     colour = "Region"
   ) +
   theme_minimal()
-
+ggsave("EDA_plot.png", width = 5, height = 3, dpi = 300)
 # Create a clean summary table for regional PSI levels
 regional_summary <- long_data %>% 
   group_by(location) %>% 
