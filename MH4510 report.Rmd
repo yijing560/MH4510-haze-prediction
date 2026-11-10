@@ -31,6 +31,8 @@ Traditional air quality forecasting approaches such as Multiple Linear Regressio
 Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra and Kalimantan, together with the Sumatra smoke-transport interaction term. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The data are split by time (training: 1 August to 10 October 2019; testing: 11 to 31 October 2019) to avoid leaking future observations into training. As this split is deterministic, all models in the group are evaluated on the same test set. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and fire/smoke transport to assess whether local persistence or upstream burning dominates as the horizon lengthens. Forecasts are compared against the elastic net and a persistence benchmark (forecast = current west PSI) using RMSE, MAE and $R^2$.
 
 ## VARX Spatio-Temporal Model
+To capture spatial inter-dependencies across Singapore’s five geographic zones simultaneously, we fit a Vector Autoregressive Exogenous (VARX) model. Unlike single-region regressors that forecast zones in isolation, the VARX framework models the five regional air quality series as an interconnected endogenous vector system, $\mathbf{Y}_t = [\text{North}_t, \text{South}_t, \text{East}_t, \text{West}_t, \text{Central}_t]^T$, driven by exogenous wind vectors and Indonesian smoke advection inputs, $\mathbf{X}_t$. The exogenous feature matrix $\mathbf{X}_t$ comprises wind velocity components ($u$, $w$), daily fire radiative power in Sumatra, and the Sumatra smoke-transport interaction term. Stationarity across all five series in $\mathbf{Y}_{\text{train}}$ was verified using Augmented Dickey-Fuller (ADF) tests. Optimal lag length $p$ for the endogenous components was selected via `VARselect()` by minimizing the Akaike Information Criterion (AIC) up to a maximum lag of 10 hours. Directional transmission across regional pairs under prevailing monsoonal winds was evaluated using pairwise Granger causality tests (`causality()`). To trace how incoming smoke fronts physically diffuse across the island network, orthogonalized Impulse Response Functions (IRFs) were simulated over a 24-hour horizon following a 1-unit shock at entry regions (South and West). Finally, multi-step out-of-sample forecasts were generated on the test set (11 to 31 October 2019) using `predict()` with exogenous test inputs $\mathbf{X}_{\text{test}}$, and evaluated on the West region using RMSE, MAE, and $R^2$.
+
 ## Conformal Coverage
 ## TBC
 
@@ -79,6 +81,43 @@ Figure 3 shows the top 15 predictors at each horizon. At $t+1$ hr, the most impo
 However, higher importance does not imply better forecasts. The $t+6$ hr Random Forest, which relies most on the fire variables, generalised worst to the October test period. A possible reason is that the fire variables are daily values that are constant within each day, so the forest may have used them to memorise the training days rather than learn a relationship that holds in October. Future work could use lagged or smoothed fire features and time-series cross-validation to reduce this.
 
 ## VARX Spatio-Temporal Model
+
+### Optimal Lag Selection & Granger Causality
+ADF tests confirmed stationarity across all five regional training series ($p < 0.01$). Model lag selection via `VARselect()` identified $p = 3$ hours as optimal under AIC, indicating that a 3-hour lookback window provides maximum predictive memory for the joint regional system. Pairwise Granger causality tests confirmed statistically significant directional transmission ($p < 0.001$) across all regional pairs. Given Singapore's compact geographic footprint, air masses create high spatial autocorrelation across the island, confirming that past observations in entry zones contain unique predictive information for adjacent central and northern zones.
+
+### Spatial Diffusion Profiles (Impulse Response Functions)
+Impulse Response Functions (IRFs) simulated over a 24-hour horizon map the physical transmission delays across Singapore following a shock at key entry points (Figure 1 and Figure 2).
+
+| Entry Region | Peak Response Time (Other Regions) | Relative Peak Magnitude | Primary Physical Behavior |
+|---|---|---|---|
+| **South** | 2 to 3 hours post-shock | High ($\sim 2.0 - 2.5\ \mu\text{g/m}^3$) | Fast advection northward along the central corridor under prevailing winds. |
+| **West** | 4 to 6 hours post-shock | Moderate ($\sim 0.5 - 1.0\ \mu\text{g/m}^3$) | Slower cross-island drift with greater spatial dissipation from the western edge. |
+
+![Island-Wide PM2.5 Response to South Shock](irf_south.png)
+
+![Island-Wide PM2.5 Response to West Shock](irf_west.png)
+
+A shock originating in the South region causes an immediate own-region spike at $t=0$ ($\sim 6.5\ \mu\text{g/m}^3$) and reaches peak impact in neighboring regions 2 to 3 hours post-shock. Conversely, a shock originating in the West region takes 4 to 6 hours to peak in eastern and northern zones with lower overall magnitude, reflecting longer travel distance across land and greater spatial dissipation.
+
+### Out-of-Sample Forecast Accuracy (West Region)
+The table below compares the dynamic multi-step VARX forecast against the Elastic Net baseline, Random Forest, and Persistence benchmark on the test set (11 to 31 October 2019).
+
+| Horizon / Framework | Model | RMSE | MAE | $R^2$ |
+|---|---|---|---|---|
+| $t+1$ hr | Persistence | 6.45 | 4.90 | 0.462 |
+| $t+1$ hr | Elastic Net | 5.79 | 4.62 | 0.493 |
+| $t+1$ hr | Random Forest | 6.23 | 5.02 | 0.443 |
+| $t+6$ hr | Persistence | 9.18 | 7.28 | 0.122 |
+| $t+6$ hr | Elastic Net | 7.87 | 6.15 | 0.152 |
+| $t+6$ hr | Random Forest | 13.30 | 9.87 | 0.030 |
+| Dynamic (504-Step Test) | VARX System | 11.17 | 8.97 | 0.031 |
+
+Across the 504-step holdout test set, the VARX model achieved an RMSE of 11.17 $\mu\text{g/m}^3$, an MAE of 8.97 $\mu\text{g/m}^3$, and an $R^2$ of 0.031. Over an extended 21-day un-updated forecast horizon, VARX performs worse than 1-step-ahead models ($t+1$ hr Elastic Net RMSE 5.79), but outperforms the extended 6-step-ahead Random Forest ($t+6$ hr RMSE 13.30, $R^2$ 0.030).
+
+![VARX Out-of-Sample PM2.5 Forecast (West Region)](varx_eval_plot.png)
+
+As shown in Figure 3, the VARX forecast (red dashed line) generates a smoothed trajectory that successfully captures the macro-level trend and low-frequency accumulation cycles over the 3-week test period, correctly identifying major haze build-ups around mid-October (14–16 Oct) and late October (24–25 Oct). Because the linear system minimizes overall mean squared error, it acts as a low-pass filter that dampens sharp hourly volatility and underpredicts extreme peaks. During sudden mid-month surges, autoregressive lags introduce a minor phase delay, whereas toward late October, updated wind vector changes ($\mathbf{X}_t$) act as leading indicators, pulling predictions downward slightly before ground-level sensors register concentration drops.
+
 ## Conformal Coverage
 ## TBC
 
