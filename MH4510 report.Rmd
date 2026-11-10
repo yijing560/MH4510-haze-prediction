@@ -3,7 +3,7 @@ title: "MH4510 Group Project: Report"
 subtitle: "Haze Prediction"
 author: |
   Leong Yi Jing \hfill U2330421C \
-  Charlene Tooh Xin Yi \hfill U \
+  Charlene Tooh Xin Yi \hfill U2340423L \
   Dao Le Bao Ngoc \hfill U \
   Goh Zhe Qi Amanda \hfill U2340128H \
   Ng Li Xin \hfill U \
