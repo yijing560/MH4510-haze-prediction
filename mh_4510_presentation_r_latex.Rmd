@@ -86,7 +86,7 @@ knitr::kable(
 
 ## Models
 \begin{block}{Elastic Net}
-input 
+Serves as our regularized linear baseline, efficiently managing severe multicollinearity across historical quality readings from different areas and weather factors. 
 \end{block}
 
 \begin{block}{Random Forest}
@@ -98,16 +98,43 @@ input
 \end{block}
 
 ## Models (cont.)
-\begin{block}{Conformal Coverage}
+\begin{block}{Spatial Autoregressive (SAR)}
 input 
 \end{block}
 
-\begin{block}{Spatial Autoregressive (SAR)}
+\begin{block}{Conformal Coverage}
 input 
 \end{block}
 
 ## Results and Conclusion
 \begin{block}{Evaluation of Models}
-input 
-\end{block}
+\centering
+\begin{small}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+model_summary <- tibble(
+  Model = c("Elastic Net", "Random Forest (t+1)", "Random Forest (t+6)", "VARX", "SAR (t+1)", "SAR (t+6)"),
+  RMSE = c(5.67, 6.72, 10.10, 11.17, 5.78, 8.74),
+  MAE  = c(4.57, 5.56, 8.54, 8.97,  4.43, 6.93),
+  "R²"  = c(0.683, 0.620, 0.165, 0.031, 0.623, 0.179)
+)
 
+knitr::kable(
+  model_summary,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  linesep = "",
+  align = c("l", "c", "c", "c"),
+  col.names = c("Model", "RMSE", "MAE", "R²")
+)
+```
+\end{small}
+\end{block}
+\begin{block}{Results}
+\begin{itemize}
+\item \textbf{Top Model:} \textbf{Elastic Net} achieves the best forecasting performance, yielding the lowest test RMSE ($5.67$) and highest $R^2$ ($0.683$).
+  \item \textbf{Non-Linear Advantage:} Captures complex lag dynamics and peak smoke surges much better than linear models (RF VS Elastic Net \& VARX).
+  \item \textbf{Spatial Effects:} SAR model proves significant cross-boundary diffusion during the Southwest Monsoon.
+  \item \textbf{Horizon Decay:} Accuracy drops at longer lead times ($t+6$) due to high atmospheric volatility and environmental uncertainty (RF \& SAR).
+\end{itemize}
+\end{block}
