@@ -100,25 +100,13 @@ Models all 5 Singapore regions simultaneously ($\mathbf{Y}_t$) with wind and sat
 \mathbf{Y}_t = \mathbf{c} + \sum_{i=1}^{p=3} \mathbf{A}_i \mathbf{Y}_{t-i} + \mathbf{B}_0 \mathbf{X}_t + \boldsymbol{\varepsilon}_t
 \]
 \end{block}
-\begin{columns}[T]
-\begin{column}{0.48\textwidth}
-\begin{block}{Spatio-Temporal Diffusion}
-\begin{itemize}
-  \item \textbf{Directional Causality:} South ($p < 0.001$) and West ($p < 0.001$) Granger-cause spikes across neighboring regions.
-  \item \textbf{Propagation Lag:} IRFs reveal smoke entering South reaches Central/North within \textbf{2--3 hrs} vs. \textbf{4--6 hrs} from West.
-\end{itemize}
-\end{block}
-\end{column}
-\begin{column}{0.48\textwidth}
 \begin{block}{Out-of-Sample Forecast (West Region)}
 \centering
-\includegraphics[width=0.85\textwidth]{VARX_Actual_Predicted_West.png}
+\includegraphics[width=0.4\textwidth]{VARX_Actual_Predicted_West.png}
 \begin{itemize}
-  \item \textbf{Macro Trends:} Captures multi-day haze accumulation cycles, but linear MSE loss over-smooths sharp hourly peaks.
+  \item Effectively tracks overall trends, but predictions are over-smoothed and show lag during sudden pollution spikes
 \end{itemize}
 \end{block}
-\end{column}
-\end{columns}
 
 ## Models (cont.)
 \begin{block}{Spatial Autoregressive (SAR)}
