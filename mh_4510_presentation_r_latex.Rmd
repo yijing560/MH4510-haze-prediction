@@ -25,7 +25,7 @@ header-includes:
     }
 ---
 
-```{r r global_options, include=FALSE, message=FALSE}
+```{r global_options, include=FALSE, message=FALSE}
 # the following command prevents all the R codes 
 # from being included into the slides
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
@@ -80,7 +80,7 @@ knitr::kable(
 
 \begin{column}{0.45\textwidth}
 \centering
-\includegraphics[width=0.70\textwidth]{EDA_plot.png}
+\includegraphics[width=0.55\textwidth]{EDA_plot.png}
 \end{column}
 \end{columns}
 
@@ -99,7 +99,20 @@ input
 
 ## Models (cont.)
 \begin{block}{Spatial Autoregressive (SAR)}
-input 
+Forecasts PM$_{2.5}$ across five Singapore regions while accounting for
+spatial dependence between neighbours.
+\[
+\mathbf{y}_{t+h}=\rho_h W\mathbf{y}_{t+h}
++X_t\boldsymbol{\beta}_h+\boldsymbol{\varepsilon}_{t+h},
+\quad h\in\{1,6\}.
+\]
+\begin{itemize}
+  \item $W$: row-standardised neighbour weights; $\rho_h$: spatial dependence.
+  \item $X_t$: current local PM$_{2.5}$, wind components, Sumatra fire power
+        and region indicators.
+  \item Fit by maximum likelihood; compare with OLS using RMSE and MAE
+        across all regions on 21--31 October 2019.
+\end{itemize}
 \end{block}
 
 \begin{block}{Conformal Coverage}
