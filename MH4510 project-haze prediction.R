@@ -636,40 +636,42 @@ fit_sar <- function(h) {
 
   # 4. Predict with OLS
   pred_ols <- predict(ols, newdata = test_sp)
-
   # 5. Predict with SAR using spatial multiplier
   rho <- as.numeric(sar$arcoef)
-
+  
   pred_sar <- test_sp %>%
     group_split(Timestamp) %>%
     map_dfr(function(g) {
-
       g <- arrange(g, region)
-
       X <- model.matrix(formula_sp, data = g)
       xb <- as.vector(X %*% sar$coefficients)
-
       g$prediction <- as.vector(
         solve(diag(5) - rho * W, xb)
       )
-
       g
-    })
-
-  # 6. Evaluate forecasts
+    }) %>% 
+    arrange(region, Timestamp) # <--- ADD THIS LINE TO FIX THE SORT ORDER!
+  
+  # Ensure test_sp is in the exact same order for fair comparison
+  test_sp_ordered <- test_sp %>% arrange(region, Timestamp)
+  
+  # 6. Evaluate forecasts using aligned data
   results <- tibble(
     Horizon = paste0("t+", h, " hr"),
     Model = c("OLS", "SAR"),
     RMSE = c(
-      RMSE(pred_ols, test_sp$target),
-      RMSE(pred_sar$prediction, pred_sar$target)
+      RMSE(predict(ols, newdata = test_sp_ordered), test_sp_ordered$target),
+      RMSE(pred_sar$prediction, test_sp_ordered$target)
     ),
     MAE = c(
-      MAE(pred_ols, test_sp$target),
-      MAE(pred_sar$prediction, pred_sar$target)
+      MAE(predict(ols, newdata = test_sp_ordered), test_sp_ordered$target),
+      MAE(pred_sar$prediction, test_sp_ordered$target)
+    ),
+    R2 = c(
+      cor(predict(ols, newdata = test_sp_ordered), test_sp_ordered$target)^2,
+      cor(pred_sar$prediction, test_sp_ordered$target)^2
     )
   )
-
   list(
     results = results,
     rho = rho,
