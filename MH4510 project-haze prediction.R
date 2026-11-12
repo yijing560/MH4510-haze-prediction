@@ -245,7 +245,7 @@ en_path_df %>%
   theme_minimal()
 
 # ==============================================================================
-# PHASE 3
+# PHASE 3: Random Forest
 # ==============================================================================
 # install.packages("randomForest")
 library(randomForest)
@@ -273,13 +273,37 @@ build_horizon_data <- function(df, h, n_lags = 5) {
 fit_horizon <- function(h, seed = 42) {
   d           <- build_horizon_data(master_haze_2019, h)
   target_time <- d$Timestamp + hours(h)
-  train       <- d[target_time <  split_date, ]
-  test        <- d[target_time >= split_date, ]
+  
+  train <- d[
+    target_time >= as.POSIXct("2019-08-01 00:00:00",
+                              tz = "Asia/Singapore") &
+      target_time < as.POSIXct("2019-10-21 00:00:00",
+                               tz = "Asia/Singapore"),
+  ]
+  
+  test <- d[
+    target_time >= as.POSIXct("2019-10-21 00:00:00",
+                              tz = "Asia/Singapore") &
+      target_time < as.POSIXct("2019-11-01 00:00:00",
+                               tz = "Asia/Singapore"),
+  ]
   
   x_train <- train %>% select(-Timestamp, -target) %>% as.data.frame()
   x_test  <- test  %>% select(-Timestamp, -target) %>% as.data.frame()
   y_train <- train$target
   y_test  <- test$target
+  cat("\nForecast horizon:", h, "hour(s)\n")
+  
+  cat("Training period:",
+      min(train$target_time), "to",
+      max(train$target_time), "\n")
+  
+  cat("Testing period:",
+      min(test$target_time), "to",
+      max(test$target_time), "\n")
+  
+  cat("Training observations:", nrow(train), "\n")
+  cat("Testing observations:", nrow(test), "\n")
   p       <- ncol(x_train)
   
   mtry_grid <- sort(unique(pmax(1, round(c(sqrt(p), p / 5, p / 3, p / 2, p)))))
@@ -296,22 +320,39 @@ fit_horizon <- function(h, seed = 42) {
   rf_pred <- predict(rf_final, newdata = x_test)
   
   set.seed(seed)
+  
   en_fit <- train(
-    x = x_train, y = y_train, method = "glmnet",
-    tuneGrid = expand.grid(alpha = seq(0, 1, length = 5),
-                           lambda = 10^seq(-2, 2, length = 5)),
-    trControl = trainControl(method = "cv", number = 5),
+    x = x_train,
+    y = y_train,
+    method = "glmnet",
+    tuneGrid = expand.grid(
+      alpha = seq(0, 1, length = 5),
+      lambda = 10^seq(-2, 2, length = 5)
+    ),
+    trControl = trainControl(
+      method = "timeslice",
+      initialWindow = floor(0.7 * nrow(x_train)),
+      horizon = 24,
+      fixedWindow = FALSE
+    ),
     preProcess = c("scale")
   )
+  
   en_pred <- predict(en_fit, newdata = x_test)
   
   naive_pred <- x_test$Lag_west_0
   
   metrics <- function(pred, obs, name) {
-    tibble(horizon = h, model = name,
-           RMSE = RMSE(pred, obs), MAE = MAE(pred, obs),
-           R2 = cor(pred, obs)^2)
+    tibble(
+      horizon = h,
+      model = name,
+      RMSE = sqrt(mean((obs - pred)^2)),
+      MAE = mean(abs(obs - pred)),
+      R2 = 1 - sum((obs - pred)^2) /
+        sum((obs - mean(obs))^2)
+    )
   }
+  
   results <- bind_rows(
     metrics(naive_pred, y_test, "Persistence (naive)"),
     metrics(en_pred,    y_test, "Elastic Net"),
@@ -389,10 +430,11 @@ map_dfr(phase3_fit, "test_df") %>%
   geom_line(aes(y = actual, colour = "Actual"), alpha = 0.7) +
   geom_line(aes(y = rf, colour = "Random Forest"), alpha = 0.7) +
   facet_wrap(~ horizon, ncol = 1) +
-  labs(title = "Random Forest Forecasts vs Actual West PSI (Test Period)",
-       x = "Timestamp", y = "PSI Level", colour = NULL) +
+  labs(
+    title = "Random Forest Forecasts vs Actual West PSI", subtitle = "Testing period: 21–31 October 2019",
+    x = "Target Timestamp", y = "PSI Level", colour = NULL) +
   theme_minimal()
-
+                   
 # ==============================================================================
 # PHASE 4 -  VECTOR AUTOREGRESSIVE EXOGENOUS (VARX) SYSTEM ----
 # ==============================================================================
