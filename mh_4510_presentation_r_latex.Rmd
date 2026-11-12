@@ -1,6 +1,6 @@
 ---
 title: "Singapore Haze Prediction Using Machine Learning"
-author: "Leong Yi Jing, Charlene Tooh Xin Yi, Dao Le Bao Ngoc, Goh Zheqi Amanda, Ng Li Xin"
+author: "Leong Yi Jing, Charlene Tooh Xin Yi, Dao Le Bao Ngoc, Goh Zhe Qi Amanda, Ng Li Xin"
 date: "13 November 2026"
 output:
   beamer_presentation:
