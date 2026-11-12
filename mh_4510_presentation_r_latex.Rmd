@@ -130,7 +130,6 @@ Models all 5 Singapore regions simultaneously ($\mathbf{Y}_t$) while incorporati
 \end{itemize}
 \end{block}
 
-## Models (cont.)
 \begin{block}{Spatial Autoregressive (SAR)}
 Forecasts PM$_{2.5}$ across five Singapore regions while accounting for
 spatial dependence between neighbours.
@@ -146,10 +145,6 @@ spatial dependence between neighbours.
   \item Fit by maximum likelihood; compare with OLS using RMSE and MAE
         across all regions on 21--31 October 2019.
 \end{itemize}
-\end{block}
-
-\begin{block}{Conformal Coverage}
-input 
 \end{block}
 
 ## Results and Conclusion
