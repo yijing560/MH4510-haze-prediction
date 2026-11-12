@@ -90,7 +90,35 @@ Serves as our regularized linear baseline, efficiently managing severe multicoll
 \end{block}
 
 \begin{block}{Random Forest}
-input 
+Non-linear ensemble of 500 trees forecasting west-region PSI at $t+1$ and $t+6$ hours. It can capture threshold effects that linear models miss, e.g. wind speed needing to exceed a critical value before smoke travels inland.
+\begin{itemize}
+  \item Predictors: PSI of all 5 regions (lags 0--5 h), wind vectors, Sumatra and Kalimantan fire power and counts, smoke-transport term.
+  \item \texttt{mtry} chosen by out-of-bag (OOB) error.
+  \item Time-based split: train 1 Aug--10 Oct, test 11--31 Oct 2019.
+  \item Permutation importance (\%IncMSE), grouped by driver type.
+\end{itemize}
+\end{block}
+
+## Random Forest: What Drives the Forecast?
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\centering
+\textbf{Top 15 predictors}\\[0.3em]
+\includegraphics[width=\textwidth]{importance_plot.png}
+\end{column}
+\begin{column}{0.44\textwidth}
+\centering
+\textbf{Share of importance by group}\\[0.3em]
+\includegraphics[width=\textwidth]{group_plot.png}
+\end{column}
+\end{columns}
+
+\begin{block}{Findings}
+\begin{itemize}
+  \item \textbf{$t+1$:} most important predictors are the latest PSI readings across all regions (local persistence and spatial neighbours).
+  \item \textbf{$t+6$:} fire power, hotspot counts and north--south wind move up the ranking, so upstream burning and transport matter more as the horizon grows.
+  \item Higher importance does not mean better forecasts: the daily fire features may not generalise to the test period.
+\end{itemize}
 \end{block}
 
 ## Models (cont.)
