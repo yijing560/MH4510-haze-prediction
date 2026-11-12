@@ -90,35 +90,32 @@ Serves as our regularized linear baseline, efficiently managing severe multicoll
 \end{block}
 
 \begin{block}{Random Forest}
-Non-linear ensemble of 500 trees forecasting west-region PSI at $t+1$ and $t+6$ hours. It can capture threshold effects that linear models miss, e.g. wind speed needing to exceed a critical value before smoke travels inland.
-\begin{itemize}
-  \item Predictors: PSI of all 5 regions (lags 0--5 h), wind vectors, Sumatra and Kalimantan fire power and counts, smoke-transport term.
-  \item \texttt{mtry} chosen by out-of-bag (OOB) error.
-  \item Time-based split: train 1 Aug--10 Oct, test 11--31 Oct 2019.
-  \item Permutation importance (\%IncMSE), grouped by driver type.
-\end{itemize}
-\end{block}
+\small
+\textbf{Objective:} Forecast West-region PSI at $t+1$ and $t+6$ hours.
 
-## Random Forest: What Drives the Forecast?
-\begin{columns}[T]
-\begin{column}{0.52\textwidth}
-\centering
-\textbf{Top 15 predictors}\\[0.3em]
-\includegraphics[width=\textwidth]{importance_plot.png}
-\end{column}
-\begin{column}{0.44\textwidth}
-\centering
-\textbf{Share of importance by group}\\[0.3em]
-\includegraphics[width=\textwidth]{group_plot.png}
-\end{column}
-\end{columns}
+\vspace{0.15cm}
 
-\begin{block}{Findings}
+\textbf{Predictors:}
 \begin{itemize}
-  \item \textbf{$t+1$:} most important predictors are the latest PSI readings across all regions (local persistence and spatial neighbours).
-  \item \textbf{$t+6$:} fire power, hotspot counts and north--south wind move up the ranking, so upstream burning and transport matter more as the horizon grows.
-  \item Higher importance does not mean better forecasts: the daily fire features may not generalise to the test period.
+  \item Historical PSI (5 regions, lags 0--5 hours).
+  \item Wind components and mean wind speed.
+  \item Sumatra and Kalimantan fire radiative power (FRP) and hotspot counts.
+  \item Smoke transport (southerly wind $\times$ Sumatra FRP).
 \end{itemize}
+
+\vspace{0.1cm}
+
+\textbf{Model Configuration:}
+\begin{itemize}
+  \item 500 trees; optimal \texttt{mtry} selected using OOB error.
+  \item Training: 1 Aug--20 Oct; Testing: 21--31 Oct 2019.
+\end{itemize}
+
+\vspace{0.1cm}
+
+\textbf{Variable Importance:}
+Permutation importance (\%IncMSE) identifies the key predictors, grouped into:
+Local PSI lags, other-region PSI lags, wind and fire/smoke transport.
 \end{block}
 
 ## Models (cont.)
