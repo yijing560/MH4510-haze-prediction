@@ -124,12 +124,11 @@ Non-linear ensemble of 500 trees forecasting west-region PSI at $t+1$ and $t+6$ 
 ## Models (cont.)
 \begin{block}{Vector Autoregressive Exogenous (VARX) System}
 Models all 5 Singapore regions simultaneously ($\mathbf{Y}_t$) with wind vectors and Sumatra fire advection ($\mathbf{X}_t$)[cite: 3, 6]:
-\[
-\mathbf{Y}_t = \mathbf{c} + \sum_{i=1}^{p=3} \mathbf{A}_i \mathbf{Y}_{t-i} + \mathbf{B}_0 \mathbf{X}_t + \boldsymbol{\varepsilon}_t
-\]
 \begin{itemize}
+  \item IRFs reveal that smoke entering the South region takes 2-3 hours to diffuse inland across neighbouring regions.
   \item Final model effectively tracks overall trends, but predictions are over-smoothed and show lag during sudden pollution spikes.
 \end{block}
+
 
 ## Models (cont.)
 \begin{block}{Spatial Autoregressive (SAR)}
