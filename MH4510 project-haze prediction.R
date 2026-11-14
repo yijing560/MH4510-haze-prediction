@@ -444,30 +444,31 @@ library(vars)
 library(tseries)
 
 # 1. Train/Test sets (Chronological Split) ----
-# Training set: August 1 to October 10, 2019
-# Test set: October 11 to October 31, 2019
-train_df <- master_haze_2019 %>% filter(Date <= as_date("2019-10-10"))
-test_df <- master_haze_2019 %>% filter(Date > as_date("2019-10-10"))
-cat("VARX Training observations:", nrow(train_df), "\n") # 1704
-cat("VARX Testing observations: ", nrow(test_df), "\n") # 504
 
-# Extract Endogenous Matrix Y_t (5 Singapore regional air quality series)
-Y_train <- as.matrix(train_df[, c("north", "south", "east", "west", "central")])
-Y_test <- as.matrix(test_df[, c("north", "south", "east", "west", "central")])
+# Training set: August 1 to October 20, 2019
+# Test set: October 21 to October 31, 2019
+train_df <- master_haze_2019 %>% filter(Timestamp < as.POSIXct("2019-10-21 00:00:00", tz = "UTC"))
+test_df  <- master_haze_2019 %>% filter(Timestamp >= as.POSIXct("2019-10-21 00:00:00", tz = "UTC"))
+cat("VARX Training observations:", nrow(train_df), "\n")
+cat("VARX Testing observations: ", nrow(test_df), "\n")
+region_cols <- c("north", "south", "east", "west", "central")
+exog_cols   <- c("wind_u", "wind_w", "daily_frp_Sumatra", "smoke_transport_Sumatra")
 
-# Extract Exogenous Matrix X_t (Wind velocity vectors & Sumatra smoke transport)
-X_train <- as.matrix(train_df[, c("wind_u", "wind_w", "daily_frp_Sumatra", 
-                                  "smoke_transport_Sumatra")])
-X_test <- as.matrix(test_df[, c("wind_u", "wind_w", "daily_frp_Sumatra", 
-                                "smoke_transport_Sumatra")])
+# Extract Endogenous Matrix Y_t and Exogenous Matrix X_t
+Y_train <- as.matrix(train_df[, region_cols])
+X_train <- as.matrix(train_df[, exog_cols])
+Y_full  <- as.matrix(master_haze_2019[, region_cols])
+X_full  <- as.matrix(master_haze_2019[, exog_cols])
 
 # 2. Stationarity Checks (Augmented Dickey-Fuller Test) ----
+
 apply(Y_train, 2, function(x) {
   adf_res <- adf.test(x)
   return(c(p_value = adf_res$p.value))
-})
+  })
 
 # 3. Optimal Lag Selection & VARX Fit ----
+
 # Determine optimal lag length (p) using AIC/BIC
 lag_selection <- VARselect(Y_train, lag.max = 10, type = "const", exogen = X_train)
 print(lag_selection$selection)
@@ -479,32 +480,17 @@ varx_fit <- VAR(Y_train, p = optimal_p, type = "const", exogen = X_train)
 summary(varx_fit) # Fits linear regression equations for each region
 
 # 4. Granger Causality Tests ----
-# To test directional transmission across regions under prevailing winds, 
-#   specifically South and West due to the Southwest Monsoon
-# (To test if including historical values of X yields statistically significantly 
-#   better forecasts of Y than using historical values of $Y$ alone)
-# Does elevated PM2.5 in South Granger-cause spikes across other zones?
-granger_south <- causality(varx_fit, cause = "south")
-print(granger_south$Granger)
+# (To test directional transmission across regions under prevailing winds, 
+#   specifically South and West due to the Southwest Monsoon)
 
-# Does elevated PM2.5 in West Granger-cause spikes across other zones?
-granger_west <- causality(varx_fit, cause = "west")
-print(granger_west$Granger)
-
-# Does elevated PM2.5 in North Granger-cause spikes across other zones?
-granger_north <- causality(varx_fit, cause = "north")
-print(granger_north$Granger) 
-
-# Does elevated PM2.5 in East Granger-cause spikes across other zones?
-granger_east <- causality(varx_fit, cause = "east")
-print(granger_east$Granger)
-
-# Does elevated PM2.5 in Central Granger-cause spikes across other zones?
-granger_central <- causality(varx_fit, cause = "central")
-print(granger_central$Granger)
+for (reg in region_cols) {
+  cat("\nGranger Causality - Cause:", reg, "\n")
+  print(causality(varx_fit, cause = reg)$Granger)
+}
 
 # 5. Impulse Response Functions (IRF Simulation) ----
 # (Traces how an incoming smoke shock at the South/West diffuses across Singapore)
+
 # South
 irf_south <- irf(
   varx_fit,
@@ -515,7 +501,6 @@ irf_south <- irf(
   ci = 0.95
 )
 plot(irf_south, main = "Island-Wide PM2.5 Response to South Shock (24-Hour Horizon)")
-
 # West
 irf_west <- irf(
   varx_fit,
@@ -527,68 +512,89 @@ irf_west <- irf(
 )
 plot(irf_west, main = "Island-Wide PM2.5 Response to West Shock (24-Hour Horizon)")
 
-# Central
-irf_north <- irf(
-  varx_fit,
-  impulse = "north",
-  response = c("north", "south", "east", "west", "central"),
-  n.ahead = 24, # 24-hour diffusion window
-  boot = TRUE,
-  ci = 0.95
-)
-plot(irf_north, main = "Island-Wide PM2.5 Response to North Shock (24-Hour Horizon)")
+# 6. Forecasting & Evaluation on test set (t+1 and t+6) ----
 
-# East
-irf_east <- irf(
-  varx_fit,
-  impulse = "east",
-  response = c("north", "south", "east", "west", "central"),
-  n.ahead = 24, # 24-hour diffusion window
-  boot = TRUE,
-  ci = 0.95
-)
-plot(irf_east, main = "Island-Wide PM2.5 Response to East Shock (24-Hour Horizon)")
+# Extract coefficient matrices from fitted VARX(p) model:
+# Y_t = c + A_1 Y_{t-1} + ... + A_p Y_{t-p} + B X_t
+A_mats <- Acoef(varx_fit) # List of p (5x5) endogenous lag coefficient matrices
+B_mat  <- Bcoef(varx_fit) # (5 x (5p + 1 + k_exog)) full coefficient matrix
 
-# Central
-irf_central <- irf(
-  varx_fit,
-  impulse = "central",
-  response = c("north", "south", "east", "west", "central"),
-  n.ahead = 24, # 24-hour diffusion window
-  boot = TRUE,
-  ci = 0.95
-)
-plot(irf_central, main = "Island-Wide PM2.5 Response to Central Shock (24-Hour Horizon)")
+# Separate intercept and exogenous coefficient matrices
+const_vec <- B_mat[, "const"]
+exog_mat  <- B_mat[, exog_cols, drop = FALSE]
 
-# 6. Forecasting & Evaluation (on test set) ----
-# Generate air quality forecasts on test set horizon
-varx_fcst <- predict(varx_fit, n.ahead = nrow(test_df), dumvar = X_test)
+# Helper function to recursively forecast h steps ahead from every origin t in test window
+forecast_varx_horizon <- function(h) {
+  # Indices in master_haze_2019 corresponding to target_time in Oct 21 - Oct 31
+  target_indices <- which(
+    master_haze_2019$Timestamp >= as.POSIXct("2019-10-21 00:00:00", tz = "UTC") &
+      master_haze_2019$Timestamp <  as.POSIXct("2019-11-01 00:00:00", tz = "UTC")
+  )
+  
+  preds_west  <- numeric(length(target_indices))
+  actual_west <- numeric(length(target_indices))
+  target_ts   <- master_haze_2019$Timestamp[target_indices]
+  
+  for (i in seq_along(target_indices)) {
+    idx_target <- target_indices[i]
+    idx_origin <- idx_target - h # Information available up to time t
+    # History buffer of last p observed Y vectors: Y_{t}, Y_{t-1}, ..., Y_{t-p+1}
+    Y_hist <- Y_full[(idx_origin - optimal_p + 1):idx_origin, , drop = FALSE]
+    # Recursively step forward from step 1 to step h
+    for (step in 1:h) {
+      idx_step <- idx_origin + step
+      x_step   <- X_full[idx_step, ]
+      # Start with intercept + exogenous effect
+      y_next <- const_vec + as.vector(exog_mat %*% x_step)
+      # Add autoregressive lag contributions: sum_{L=1}^p A_L * Y_{idx_step - L}
+      for (L in 1:optimal_p) {
+        y_lag  <- Y_hist[nrow(Y_hist) - L + 1, ]
+        y_next <- y_next + as.vector(A_mats[[L]] %*% y_lag)
+      }
+      # Append predicted y_next to history buffer for multi-step recursion
+      Y_hist <- rbind(Y_hist, y_next)
+    }
+    preds_west[i]  <- tail(Y_hist, 1)[, "west"]
+    actual_west[i] <- Y_full[idx_target, "west"]
+  }
+  
+  rmse <- sqrt(mean((preds_west - actual_west)^2))
+  mae  <- mean(abs(preds_west - actual_west))
+  r2   <- 1 - sum((actual_west - preds_west)^2) / sum((actual_west - mean(actual_west))^2)
+  
+  list(
+    metrics = tibble(
+      horizon = paste0("t+", h, " hr"),
+      model   = "VARX",
+      RMSE    = rmse,
+      MAE     = mae,
+      R2      = r2
+    ),
+    df = tibble(
+      Timestamp = target_ts,
+      Actual    = actual_west,
+      VARX_Predicted = preds_west,
+      horizon   = paste0("t+", h, " hr")
+    )
+  )
+}
 
-# Extract predicted vs actual values for West region
-pred_west_varx <- varx_fcst$fcst$west[, "fcst"]
-actual_west <- test_df$west
+# Run t+1 and t+6 forecasts
+varx_h1 <- forecast_varx_horizon(1)
+varx_h6 <- forecast_varx_horizon(6)
+phase4_results <- bind_rows(varx_h1$metrics, varx_h6$metrics)
+print(phase4_results) # MAE is 4.45 and 6.86 for t+1 and t+6 respectively
 
-varx_rmse <- sqrt(mean((pred_west_varx - actual_west)^2))
-varx_mae <- mean(abs(pred_west_varx - actual_west))
-varx_r2 <- cor(pred_west_varx, actual_west)^2
-
-cat("RMSE:", round(varx_rmse, 4), "\n") # 11.1688
-cat("MAE:", round(varx_mae, 4), "\n") # 8.9746
-cat("Rsquared:", round(varx_r2, 4), "\n") # 0.0309
-
-# Plot Actual vs VARX Predicted PM2.5 for West Region
-eval_df <- data.frame(
-  Timestamp = test_df$Timestamp,
-  Actual = actual_west,
-  VARX_Predicted = pred_west_varx
-)
-ggplot(eval_df, aes(x = Timestamp)) +
+# Plot Actual vs VARX Predicted PM2.5 for West Region (t+1 hr and t+6 hr)
+eval_varx_df <- bind_rows(varx_h1$df, varx_h6$df)
+ggplot(eval_varx_df, aes(x = Timestamp)) +
   geom_line(aes(y = Actual, colour = "Actual PM2.5"), alpha = 0.8) +
   geom_line(aes(y = VARX_Predicted, colour = "VARX Forecast"), linetype = "longdash") +
+  facet_wrap(~ horizon, ncol = 1) +
   labs(
-    title = "VARX Model: Out-of-Sample PM2.5 Forecast (West Region)",
-    subtitle = "Evaluation Horizon: October 11 – October 31, 2019",
-    x = "Timestamp",
+    title = "VARX Model: Out-of-Sample PM2.5 Forecasts (West Region)",
+    subtitle = "Evaluation Horizon: October 21 – October 31, 2019 (t+1 hr vs t+6 hr)",
+    x = "Target Timestamp",
     y = "PM2.5 Level (µg/m³)",
     colour = "Legend"
   ) +
