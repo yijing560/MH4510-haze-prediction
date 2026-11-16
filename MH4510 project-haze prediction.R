@@ -623,6 +623,8 @@ irf_south <- irf(
   ci = 0.95
 )
 plot(irf_south, main = "Island-Wide PM2.5 Response to South Shock (24-Hour Horizon)")
+ggsave("South IRF.png") 
+
 # West
 irf_west <- irf(
   varx_fit,
@@ -633,6 +635,7 @@ irf_west <- irf(
   ci = 0.95
 )
 plot(irf_west, main = "Island-Wide PM2.5 Response to West Shock (24-Hour Horizon)")
+ggsave("West IRF.png") 
 
 # 6. Forecasting & Evaluation on test set (t+1 and t+6) ----
 
@@ -722,6 +725,7 @@ ggplot(eval_varx_df, aes(x = Timestamp)) +
   ) +
   scale_colour_manual(values = c("Actual PM2.5" = "black", "VARX Forecast" = "red")) +
   theme_minimal()
+ggsave("VARX_Actual_Predicted_West.png") 
 
 # ==============================================================================
 # PHASE 5: SPATIAL AUTOREGRESSIVE MODEL (SAR)
