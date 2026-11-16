@@ -211,7 +211,7 @@ phase3_metrics_report <- phase3_results %>%
     Horizon = as.character(horizon),
     Model = as.character(model)
   ) %>%
-  select(Horizon, Model, RMSE, MAE, R2)
+  dplyr::select(Horizon, Model, RMSE, MAE, R2)
 
 phase3_best_t1 <- phase3_metrics_report %>%
   filter(Horizon == "t+1 hr") %>%
@@ -244,12 +244,12 @@ phase3_group_report <- phase3_group %>%
     Share = scales::percent(share, accuracy = 0.1),
     `Average importance per variable` = round(avg_importance, 2)
   ) %>%
-  select(
-    Horizon = horizon,
-    Group = group,
-    Share,
-    `Average importance per variable`
-  )
+  dplyr::select(
+  Horizon = horizon,
+  Group = group,
+  Share,
+  `Average importance per variable`
+)
 
 knitr::kable(
   phase3_group_report,
