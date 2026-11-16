@@ -206,7 +206,14 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   
   cat(sprintf("--- Out-of-Sample Test Performance (t+%d) ---\n", h))
   cat("Test MAE:", test_mae, "\n")
-  
+ 
+   if (h == 1) {
+    model_t1 <<- elastic_net_model
+    test_mae_enet_t1 <<- test_mae
+  } else if (h == 6) {
+    model_t6 <<- elastic_net_model
+    test_mae_enet_t6 <<- test_mae
+  }
   # E. Extract Final Model Coefficients
   best_alpha <- elastic_net_model$bestTune$alpha
   best_lambda <- elastic_net_model$bestTune$lambda
