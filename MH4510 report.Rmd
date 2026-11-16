@@ -348,7 +348,7 @@ knitr::include_graphics(c("South IRF.png", "West IRF.png"))
 ### Forecast Accuracy at $t+1$ and $t+6$ Hours
 Across the October 21–31 window, the $\text{VARX}(3)$ model achieves an $\text{MAE}$ of $4.45\ \mu\text{g/m}^3$ at the $t+1\text{ hr}$ horizon, which increases to $6.86\ \mu\text{g/m}^3$ at the $t+6\text{ hr}$ horizon.
 
-```{r varx-forecast-plot, echo=FALSE, fig.align="center", out.width="80%", fig.cap="VARX(3) Out-of-Sample $\\text{PM}_{2.5}$ Forecasts vs. Actual Observations for the West Region (October 21--31, 2019)", fig.pos='H'}
+```{r varx-forecast-plot, echo=FALSE, fig.align="center", out.width="80%", fig.cap="VARX(3) Out-of-Sample $\\text{PM}_{2.5}$ Forecasts vs. Actual Observations for the West Region (October 21-31, 2019)", fig.pos='H'}
 knitr::include_graphics("VARX_Actual_Predicted_West.png")
 ```
 
