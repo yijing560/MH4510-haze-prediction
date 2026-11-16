@@ -339,7 +339,7 @@ Both South and West regions yield highly significant Granger causality results (
 The 24-hour IRF simulations illustrate how a sudden smoke spike spreads across the island depending on the point of entry:
 
 ```{r varx-irf-plots, echo=FALSE, fig.align="center", fig.show="hold", out.width="49%", fig.cap="24-Hour Orthogonalized Impulse Response Functions for South (left) and West (right) $\\text{PM}_{2.5}$ Shocks", fig.pos='H'}
-knitr::include_graphics(c("South IRF.png", "West IRF.png"))
+knitr::include_graphics(c("VARX_South_IRF.png", "VARX_West_IRF.png"))
 ```
 
 * South Shock Propagation: Following a sudden spike in the South, southern $\text{PM}_{2.5}$ peaks immediately ($h = 0$) before dissipating steadily over the next 15–20 hours. Across all other regions, responses climb rapidly and peak roughly 2 hours later, demonstrating rapid inland dispersion.
