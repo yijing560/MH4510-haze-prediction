@@ -4,7 +4,7 @@ subtitle: "Haze Prediction"
 author: |
   Leong Yi Jing \hfill U2330421C \
   Charlene Tooh Xin Yi \hfill U2340423L \
-  Dao Le Bao Ngoc \hfill U \
+  Dao Le Bao Ngoc \hfill N2601865G \
   Goh Zhe Qi Amanda \hfill U2340128H \
   Ng Li Xin \hfill U \
 output: 
@@ -13,7 +13,7 @@ output:
     toc_depth: 3
     number_sections: true
     latex_engine: xelatex
-    extra_dependencies: ["float"]
+    extra_dependencies: ["float", "booktabs"]
 ---
 
 # Introduction
@@ -91,7 +91,14 @@ The feature space was constructed using temporal autoregressive lags across the 
 To prevent data leakage and simulate real-world forecasting performance during high-stakes pollution events, a strict chronological time-based split was enforced, utilizing August 1 to October 20, 2019 for training and October 21 to October 31, 2019 for out-of-sample testing. Hyperparameter tuning was conducted via 5-fold cross-validation over a grid of mixing parameters ($\alpha$) and penalty multipliers ($\lambda$). Out-of-sample forecasting accuracy across the test window was evaluated  using Mean Absolute Error (MAE).
 
 ## Random Forest
-Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. Only Sumatra-based fire radiative power, hotspot counts, and smoke-transport features are included. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The split is based on the forecast target timestamp: training targets run from 1 August to 20 October 2019, while the untouched test targets run from 21 to 31 October 2019. The same target-date windows are applied at both forecast horizons, and the Random Forest, Elastic Net comparison model and persistence benchmark are evaluated on the same test observations. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and Sumatra fire/smoke transport to assess whether local persistence or upstream inputs become more important as the horizon lengthens. Forecasts are compared using RMSE, MAE and $R^2$.
+Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. Only Sumatra-based fire radiative power, hotspot counts, and smoke-transport features are included. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The split is based on the forecast target timestamp: training targets run from 1 August to 20 October 2019, while the untouched test targets run from 21 to 31 October 2019. The same target-date windows are applied at both forecast horizons, and the Random Forest, Elastic Net comparison model and persistence benchmark are evaluated on the same test observations. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and Sumatra fire/smoke transport to assess whether local persistence or upstream inputs become more important as the horizon lengthens. Forecasts are compared using MAE.
+
+## Support Vector Machine (SVM)
+Following the kernel-comparison and tuning approach in Lab 6, we implement Support Vector Regression (SVR) using `caret` and `kernlab`. Unlike the lab's categorical response, the outcome is continuous West-region PM$_{2.5}$ at $t+1$ or $t+6$ hours. SVR fits a function that balances model complexity against deviations outside an epsilon-insensitive error band. Linear, polynomial and radial basis kernels allow us to compare a linear relationship with nonlinear alternatives.
+
+The predictor set matches Phase 3: readings from all five regions at lags 0--5 hours, wind components and mean speed, Sumatra fire power and hotspot counts, and the smoke-transport interaction (36 inputs before removal of constant columns). Training targets fall before 21 October 2019, with the same 21--31 October test observations as Random Forest. Constant predictors are removed and the remaining inputs centred and scaled within each training fold.
+
+We tune six linear configurations ($C=2^{-4},\ldots,2^1$), eight polynomial configurations ($C\in\{0.5,2\}$, scale $\in\{1/64,1/16\}$, degree $\in\{2,3\}$), and six radial configurations ($C\in\{0.5,2\}$, $\sigma\in\{1/16,1/8,1/4\}$). Three expanding chronological training windows precede seven-day validation blocks starting on 23 September, 1 October and 9 October. Training targets must precede each block's first forecast origin. The kernel and parameters with the lowest mean validation MAE are selected separately by horizon, refitted on all training data, and evaluated once on the untouched test set using MAE, RMSE and predictive $R^2$.
 
 ## VARX Spatio-Temporal Model
 ### Model Formulation
@@ -118,8 +125,14 @@ To test our physical advection hypothesis under the Southwest Monsoon, we conduc
 To ensure a direct and leak-free comparison against the other models in this study, we evaluate the fitted $\text{VARX}(p)$ system chronologically on the untouched holdout test window from October 21 to October 31, 2019. At each forecast origin $t$, we recursively generate multi-step predictions for both short-term ($t+1\text{ hr}$) and medium-term ($t+6\text{ hr}$) horizons using the estimated coefficient matrices $\hat{\mathbf{A}}_1, \dots, \hat{\mathbf{A}}_p$ and $\hat{\mathbf{B}}$. Forecast accuracy on the **West** region is quantified using Mean Absolute Error ($\text{MAE}$).
 
 
-## Spatial Autoregressive 
-## TBC
+## Spatial Autoregressive
+The Spatial Autoregressive (SAR) model predicts PM$_{2.5}$ across Singapore's five regions at one and six hours ahead. It adds a relationship between neighbouring regions to a regression using current local pollution, wind components, Sumatra fire power and regional differences:
+
+$$\mathbf{y}_{t+h}=\rho_h W\mathbf{y}_{t+h}+X_t\boldsymbol{\beta}_h+\boldsymbol{\varepsilon}_{t+h}.$$
+
+The matrix $W$ defines fixed neighbour links. Central connects to all four outer regions, while each outer region connects to Central and two other outer regions. Linked neighbours receive equal weights that sum to one for each region. The same links are used at both horizons, with no hyperparameter tuning. The coefficient $\rho_h$ measures the strength of the spatial relationship and is estimated from the training data together with the regression coefficients using maximum likelihood. This method finds coefficient values that best explain the training observations.
+
+Training targets run from August to 20 October 2019, and testing targets cover 21--31 October. The model calculates all five regional forecasts together without using their observed future pollution levels. Forecast accuracy is compared with OLS using the same inputs. West-region MAE is reported to match the other model comparisons.
 
 # Results
 ## Elastic Net
@@ -269,6 +282,51 @@ The top-15 chart ranks the predictors actually used by the fitted model at each 
 
 Daily Sumatra fire features are constant within a given day. This may limit how well the model generalises to later dates if it learns day-specific patterns rather than a stable relationship between upstream fire activity and Singapore PSI. The recalculated test-set metrics should be used to assess whether this limitation is reflected in the model's out-of-sample performance.
 
+\clearpage
+
+## Support Vector Machine (SVM)
+### Kernel Selection and Test Accuracy
+
+```{r svm-selection-table, echo=FALSE, message=FALSE, warning=FALSE}
+svm_report_t1 <- svm_results %>% filter(horizon == "t+1 hr")
+svm_report_t6 <- svm_results %>% filter(horizon == "t+6 hr")
+knitr::kable(
+  svm_selection %>% dplyr::select(Horizon = horizon, Kernel = kernel,
+                                 Parameters, `Validation MAE` = Validation_MAE),
+  format = "latex", booktabs = TRUE, digits = 3,
+  caption = "SVM kernel and hyperparameters selected by chronological validation",
+  position = "H"
+)
+```
+
+```{r svm-results-table, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::kable(
+  svm_results %>% dplyr::select(Horizon = horizon, RMSE, MAE, R2),
+  format = "latex", booktabs = TRUE, digits = 3, escape = FALSE,
+  col.names = c("Horizon", "RMSE", "MAE", "$R^2$"),
+  caption = "Selected SVM forecasting performance for West, 21--31 October 2019",
+  position = "H"
+)
+```
+
+Chronological validation selects a **`r svm_selection$kernel[1]`** kernel at one hour and a **`r svm_selection$kernel[2]`** kernel at six hours. The corresponding held-out MAEs are **`r sprintf("%.2f", svm_report_t1$MAE)`** and **`r sprintf("%.2f", svm_report_t6$MAE)`** $\mu\mathrm{g/m}^3$. Test outcomes are not used to choose either the kernel or its tuning parameters. The reported $R^2$ is $1-\mathrm{SSE}/\mathrm{SST}$, measuring predictive accuracy against the test-set mean rather than squared correlation.
+
+```{r svm-kernel-plot, echo=FALSE, out.width="85%", fig.align='center', fig.cap="Lowest mean chronological-validation MAE for each SVM kernel and forecast horizon.", fig.pos='H'}
+knitr::include_graphics("SVM_Kernel_Validation.png")
+```
+
+The linear kernel gives the lowest mean validation MAE at both horizons. Polynomial SVR is close at one hour (approximately 5.11 versus 5.09), but its six-hour validation MAE is higher (6.89 versus 6.63). The radial kernel performs less well within the tested grid. Thus, additional kernel flexibility does not improve validation accuracy in this experiment; this conclusion concerns the tested configurations rather than all possible nonlinear SVMs.
+
+### Forecasts Versus Observations
+
+```{r svm-forecast-plot, echo=FALSE, out.width="95%", fig.align='center', fig.cap="Selected SVM forecasts against West-region observations and the persistence benchmark at both horizons.", fig.pos='H'}
+knitr::include_graphics("SVM_Forecast_vs_Actual.png")
+```
+
+At one hour, the selected SVM broadly follows observed pollution fluctuations, but attenuates abrupt peaks around 23--24 October and sometimes predicts above the clean-air troughs. At six hours, forecasts are smoother and lag sudden increases, with larger errors around the major peaks on 23--24 and 29--31 October. Compared with the unadjusted persistence line, SVM reduces some delayed overshoots, although it still cannot reliably anticipate new pollution surges. The rise in test MAE from 4.51 to 6.85 is consistent with the reduced information supplied by current conditions at a longer horizon. Section 6.6 compares these West-region scores with the other models on the same target-date window.
+
+These results are conditional on the tested kernel grids and three validation blocks. The six-hour cost lies at the lower end of the linear grid, so a wider search could select a different configuration. Although fold-specific scaling and chronological validation prevent future observations from entering model fitting, complete same-day fire aggregates may contain information unavailable at the forecast origin. The experiment therefore retains the retrospective information-availability limitation discussed for the other models.
+
 ## VARX Spatio-Temporal Model
 
 ### Stationarity and Optimal Lag Order
@@ -298,8 +356,40 @@ Visually, the observed $\text{PM}_{2.5}$ levels demonstrate short-term volatilit
 
 Across both time horizons, the model also tends to underpredict the magnitude of extreme peaks while overestimating pollution levels when the air is relatively clean. Its predictions are overly smoothed as the linear VARX system minimises overall mean squared error. Despite these differences, the model generally follows the true trajectory especially at a shorter horizon.
 
-## Spatial Autoregressive 
-## TBC
+## Spatial Autoregressive
+### Forecast Accuracy
+
+```{r sar-results-summary, echo=FALSE, message=FALSE, warning=FALSE}
+sar_report_t1 <- phase5_results %>% filter(Horizon == "t+1 hr", Model == "SAR")
+sar_report_t6 <- phase5_results %>% filter(Horizon == "t+6 hr", Model == "SAR")
+ols_report_t1 <- phase5_results %>% filter(Horizon == "t+1 hr", Model == "OLS")
+ols_report_t6 <- phase5_results %>% filter(Horizon == "t+6 hr", Model == "OLS")
+sar_mae_gain_t1 <- 100 * (ols_report_t1$MAE - sar_report_t1$MAE) / ols_report_t1$MAE
+sar_mae_gain_t6 <- 100 * (ols_report_t6$MAE - sar_report_t6$MAE) / ols_report_t6$MAE
+knitr::kable(
+  phase5_results %>% dplyr::select(Horizon, Model, MAE),
+  format = "latex", booktabs = TRUE, digits = 3, position = "H",
+  caption = "OLS and fixed-neighbour SAR test MAE for West, 21--31 October 2019"
+)
+```
+
+Using the original fixed neighbour links, SAR achieves a test MAE of **`r sprintf("%.2f", sar_report_t1$MAE)`** at one hour and **`r sprintf("%.2f", sar_report_t6$MAE)`** at six hours. OLS gives **`r sprintf("%.2f", ols_report_t1$MAE)`** and **`r sprintf("%.2f", ols_report_t6$MAE)`**, respectively. SAR therefore makes slightly smaller average errors at both horizons. This suggests that including neighbouring regions helps prediction, although the improvement over OLS is small. Both models have larger errors when predicting six hours ahead.
+
+### Forecasts Versus Observations
+
+```{r sar-forecast-plot, echo=FALSE, out.width="95%", fig.align='center', fig.cap="SAR and OLS forecasts compared with actual West-region PM2.5.", fig.pos='H'}
+knitr::include_graphics("SAR_Forecast_vs_Actual.png")
+```
+
+At one hour, SAR follows most of the rises and falls in pollution. However, it still misses some sharp peaks, especially around 23--24 October. At six hours, predictions are smoother and often react late to sudden changes. The model tends to predict below the highest peaks and above the lowest readings. The SAR and OLS lines are close together, which agrees with their similar MAEs.
+
+### Spatial Dependence
+
+```{r sar-spatial-plot, echo=FALSE, out.width="85%", fig.align='center', fig.cap="Estimated spatial coefficients using the original fixed neighbour links.", fig.pos='H'}
+knitr::include_graphics("SAR_Spatial_Coefficient.png")
+```
+
+The estimated spatial coefficient is **`r sprintf("%.3f", phase5_spatial$rho[1])`** at one hour and **`r sprintf("%.3f", phase5_spatial$rho[2])`** at six hours. Both values are positive: after accounting for the other inputs, pollution levels in linked regions tend to move together. The six-hour model has a larger spatial coefficient, but also a larger forecasting error. A stronger spatial relationship therefore does not guarantee a more accurate forecast. These results show a statistical relationship between regions; they do not prove how much smoke physically travels between them.
 
 ## Model Evaluation and Comparison
 ```{r model-comparison-table, echo=FALSE, message=FALSE, warning=FALSE, }
@@ -321,18 +411,21 @@ comparison_df <- data.frame(
   Model_Architecture = c(
     "Elastic Net (Linear Baseline)", 
     "Random Forest (Non-Linear Tree)", 
+    "SVM (Support Vector Regression)",
     "VARX (Spatio-Temporal)", 
     "Spatial Autoregressive (SAR)"
   ),
   MAE_t1 = c(
     extract_mae(elastic_net_results, "Elastic Net", "t+1 hr"),
     extract_mae(phase3_results, "Random Forest", "t+1 hr"),
+    extract_mae(svm_results, "SVM", "t+1 hr"),
     extract_mae(phase4_results, "VARX", "t+1 hr"),
     extract_mae(phase5_results, "SAR", "t+1 hr", model_col = "Model", hor_col = "Horizon")
   ),
   MAE_t6 = c(
     extract_mae(elastic_net_results, "Elastic Net", "t+6 hr"),
     extract_mae(phase3_results, "Random Forest", "t+6 hr"),
+    extract_mae(svm_results, "SVM", "t+6 hr"),
     extract_mae(phase4_results, "VARX", "t+6 hr"),
     extract_mae(phase5_results, "SAR", "t+6 hr", model_col = "Model", hor_col = "Horizon")
   ),
@@ -352,9 +445,19 @@ knitr::kable(
 ```
 
 
-#Discussion
+\clearpage
 
 ## Key Findings
+
+**Forecast performance depends on the prediction horizon.** Among the five implementations in Section 6.6, SAR has the lowest one-hour West-region MAE (`r sprintf("%.2f", sar_report_t1$MAE)`), followed by VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+1 hr"])`) and SVM (`r sprintf("%.2f", svm_report_t1$MAE)`). At six hours, SVM (`r sprintf("%.2f", svm_report_t6$MAE)`) and VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+6 hr"])`) give the lowest point estimates. Their approximately 0.01 difference is insufficient to establish a meaningful advantage without uncertainty analysis. No single model is best at both horizons.
+
+**Recent pollution readings are informative, but abrupt changes remain difficult to anticipate.** MAE increases from one to six hours for every model in the comparison. Elastic Net's coefficient analysis highlights the contribution of recent regional readings, while the forecast plots show increasing smoothing, delayed responses and missed peaks at the longer horizon. These patterns support short-term forecasting from observed pollution history, but indicate that six-hour forecasts provide less reliable information about the timing and magnitude of sudden surges.
+
+**Additional nonlinear flexibility does not automatically improve generalisation.** Validation selects linear SVMs over the tested polynomial and radial alternatives at both horizons. Random Forest records MAEs of 5.53 and 8.58, exceeding the persistence benchmark's 4.56 and 7.70, respectively; it also underperforms the matched Phase 3 Elastic Net. The Phase 2 Elastic Net baseline achieves 5.44 and 7.38. Together, these results favour carefully regularised or structured models over assuming that a more flexible model will perform better. Different predictor sets and tuning procedures mean that the overall ranking describes these fitted implementations rather than an isolated effect of model architecture.
+
+**Spatial information contributes predictive value, while environmental importance varies with horizon.** SAR has slightly lower MAE than OLS at both horizons when using the same inputs and fixed neighbour links. Positive rho estimates and VARX's regional predictive relationships support modelling dependence across Singapore. Random Forest assigns the largest aggregate importance share to other-region lags, although that group contains more predictors. Wind and fire/smoke importance shares increase at six hours, suggesting greater model reliance on environmental inputs as local persistence weakens. These associations and model-based IRFs do not by themselves prove physical smoke transport. Findings remain specific to the 2019 holdout period and retrospective daily fire features, so operational use requires further time-based validation with inputs available at each forecast origin.
+
+# Discussion
 
 ## Limitations and Future Work 
 
