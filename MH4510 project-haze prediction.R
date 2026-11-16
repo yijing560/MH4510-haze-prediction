@@ -763,8 +763,7 @@ irf_south <- irf(
 )
 plot(irf_south, main = "Island-Wide PM2.5 Response to South Shock (24-Hour Horizon)")
 
-# Save the base-R IRF plot for inclusion in the report.
-png("South IRF.png", width = 8, height = 10, units = "in", res = 300)
+png("VARX_South_IRF.png", width = 8, height = 10, units = "in", res = 300)
 plot(irf_south, main = "Island-Wide PM2.5 Response to South Shock (24-Hour Horizon)")
 dev.off()
 
@@ -779,7 +778,7 @@ irf_west <- irf(
 )
 plot(irf_west, main = "Island-Wide PM2.5 Response to West Shock (24-Hour Horizon)")
 
-png("West IRF.png", width = 8, height = 10, units = "in", res = 300)
+png("VARX_West_IRF.png", width = 8, height = 10, units = "in", res = 300)
 plot(irf_west, main = "Island-Wide PM2.5 Response to West Shock (24-Hour Horizon)")
 dev.off()
 
