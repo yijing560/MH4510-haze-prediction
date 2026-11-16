@@ -16,33 +16,26 @@ fire_raw   <- read_csv("fire_archive_M-C61_825464.csv")
 # 2. CLEAN & PROCESS NASA FIRMS FIRE HOTSPOTS
 # ==============================================================================
 fire_daily <- fire_raw %>%
-  # Filter satellite detection confidence >= 30% to remove false alarms
   filter(confidence >= 30) %>%
   mutate(
     Date = ymd(acq_date),
-    # Segment fires into Sumatra vs. Kalimantan zones using geographic bounding boxes
     source_zone = case_when(
       latitude >= -6 & latitude <= 6  & longitude >= 95  & longitude <= 106 ~ "Sumatra",
-      latitude >= -4 & latitude <= 4  & longitude >= 108 & longitude <= 119 ~ "Kalimantan",
       TRUE ~ "Other"
     )
   ) %>%
-  # Keep only the target regions
-  filter(source_zone %in% c("Sumatra", "Kalimantan")) %>%
-  # Aggregate to daily total Fire Radiative Power (FRP) and fire counts
+  filter(source_zone == "Sumatra") %>%
   group_by(Date, source_zone) %>%
   summarise(
     daily_frp   = sum(frp, na.rm = TRUE),
     daily_count = n(),
     .groups     = "drop"
   ) %>%
-  # Pivot wider so Sumatra and Kalimantan become separate numeric feature columns
   pivot_wider(
     names_from  = source_zone,
     values_from = c(daily_frp, daily_count),
     values_fill = 0
   )
-
 # ==============================================================================
 # 3. CLEAN & PROCESS WIND DATA (VECTOR DECOMPOSITION)
 # ==============================================================================
@@ -142,14 +135,15 @@ regional_summary <- long_data %>%
   )
 print(regional_summary)
 # ==============================================================================
-# PART 2: PHASE 2 - ELASTIC NET BASELINE MODEL & LAGGING (TIME-BASED SPLIT)
+# PART 2: PHASE 2 - ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
 # ==============================================================================
 
-# A. Create Lagged Features (Using built-in dplyr::lag)
-split_date <-ymd("2019-10-21")
+split_date <- ymd("2019-10-21")
+
+# A. Original lagged observation function for regional PSI readings
 lagged_obs <- function(df, L) {
   if (L == 0) {
-    return(df)
+    return(df %>% select(north, south, east, west, central))
   }
   df %>%
     transmute(across(c(north, south, east, west, central),
@@ -157,92 +151,110 @@ lagged_obs <- function(df, L) {
                      .names = "Lag_{col}_{L}"))
 }
 
-# Generate 1 to 5 hour lags across all regional columns
-PSI_with_lags <- c(0, 1:5) %>%
-  map_dfc(function(L) lagged_obs(master_haze_2019, L)) %>%
-  select(Timestamp, west, starts_with("Lag")) %>%
-  drop_na()
+# Function to run Elastic Net for any forecast horizon h (t+1 and t+6)
+fit_elastic_net_horizon <- function(h, seed = 42) {
+  
+  cat(sprintf("\n========================================\n"))
+  cat(sprintf("Running Elastic Net for Horizon: t+%d\n", h))
+  cat(sprintf("========================================\n"))
+  
+  # Generate 0 to 5 hour regional lags and define target as lead(west, h)
+  PSI_with_lags <- c(0, 1:5) %>%
+    map_dfc(function(L) lagged_obs(master_haze_2019, L)) %>%
+    mutate(
+      Timestamp = master_haze_2019$Timestamp,
+      target = lead(west, h)
+    ) %>%
+    select(Timestamp, target, starts_with("Lag")) %>%
+    drop_na()
+  
+  # B. Chronological Time-Based Train-Test Split
+  # Training window: August 1 to October 20
+  # Testing window: October 21 to October 31
+  train_data <- PSI_with_lags %>%  
+    filter(Timestamp < split_date) %>%  
+    select(-Timestamp) # Remove timestamp column before modeling matrix
+  
+  test_data <- PSI_with_lags %>%  
+    filter(Timestamp >= split_date) %>%  
+    select(-Timestamp)
+  
+  cat("Dimensions of training set:", dim(train_data), "\n")
+  cat("Dimensions of testing set:", dim(test_data), "\n")
+  
+  # C. Train Elastic Net Model using caret (5-fold CV, scaling, hyperparameter grid)
+  set.seed(seed) # Keep seed for cross-fold partitioning reproducibility only
+  elastic_net_model <- train(
+    target ~ .,  
+    data = train_data,  
+    method = "glmnet",
+    tuneGrid = expand.grid(
+      alpha = seq(from = 0, to = 1, length = 5),  
+      lambda = 10^(seq(from = -2, to = 2, length = 5))
+    ),
+    trControl = trainControl(method = "cv", number = 5),
+    preProcess = c("scale")
+  )
+  
+  # Print tuning summary and best hyperparameters found via cross-validation
+  print(elastic_net_model)
+  print(elastic_net_model$bestTune)
+  
+  # D. Evaluate on Out-of-Sample Test Set (MAE metric standardization)
+  predictions <- predict(elastic_net_model, newdata = test_data)
+  test_mae  <- MAE(predictions, test_data$target)
+  
+  cat(sprintf("--- Out-of-Sample Test Performance (t+%d) ---\n", h))
+  cat("Test MAE:", test_mae, "\n")
+  
+  # E. Extract Final Model Coefficients
+  best_alpha <- elastic_net_model$bestTune$alpha
+  best_lambda <- elastic_net_model$bestTune$lambda
+  
+  en_coefs <- coef(elastic_net_model$finalModel, s = best_lambda)
+  print(en_coefs)
+  
+  # F. Visualisation: Coefficient Paths across Lambda (Lab 4 Style)
+  lambda_for_plotting <- 10^seq(from = -2, to = 2, length = 100)
+  
+  en_path_model <- glmnet(
+    x = as.matrix(scale(train_data %>% select(-target))),
+    y = train_data$target,
+    alpha = best_alpha,
+    lambda = lambda_for_plotting
+  )
+  
+  en_path_df <- as.matrix(coef(en_path_model, lambda_for_plotting)) %>%
+    t() %>%
+    as.data.frame() %>%
+    mutate(lambda = lambda_for_plotting)
+  
+  path_plot <- en_path_df %>%
+    select(-`(Intercept)`) %>%
+    pivot_longer(-lambda, names_to = "variable", values_to = "coef") %>%
+    ggplot(aes(x = lambda, y = coef, colour = variable)) +
+    geom_line() +
+    scale_x_log10() +
+    labs(
+      title = sprintf("Elastic Net Regularization Coefficient Paths (t+%d hr)", h),
+      subtitle = sprintf("Optimal alpha = %.2f (Chronological Split)", best_alpha),
+      x = "Lambda (log scale)",
+      y = "Coefficient Estimate",
+      colour = "Predictor"
+    ) +
+    theme_minimal()
+  
+  print(path_plot)
+  
+  tibble(horizon = paste0("t+", h, " hr"), model = "Elastic Net", MAE = test_mae)
+}
 
-# B. Chronological Time-Based Train-Test Split (No random set.seed needed)
-# Training window: August 1 to October 20
-# Testing window: October 21 to October 31
-train_data <- PSI_with_lags %>% 
-  filter(Timestamp < ymd("2019-10-21")) %>% 
-  select(-Timestamp) # Remove timestamp column before modeling matrix
+# Run Elastic Net for both t+1 and t+6 horizons
+horizons <- c(1, 6)
+elastic_net_results <- map_dfr(horizons, fit_elastic_net_horizon)
 
-test_data <- PSI_with_lags %>% 
-  filter(Timestamp >= ymd("2019-10-21")) %>% 
-  select(-Timestamp)
-
-cat("Dimensions of training set:", dim(train_data), "\n")
-cat("Dimensions of testing set:", dim(test_data), "\n")
-
-# C. Train Elastic Net Model using caret (5-fold CV, scaling, hyperparameter grid)
-set.seed(42) # Keep seed for cross-fold partitioning reproducibility only
-elastic_net_model <- train(
-  west ~ ., 
-  data = train_data, 
-  method = "glmnet",
-  tuneGrid = expand.grid(
-    alpha = seq(from = 0, to = 1, length = 5), 
-    lambda = 10^(seq(from = -2, to = 2, length = 5))
-  ),
-  trControl = trainControl(method = "cv", number = 5),
-  preProcess = c("scale")
-)
-
-# Print tuning summary and best hyperparameters found via cross-validation
-print(elastic_net_model)
-print(elastic_net_model$bestTune)
-
-# D. Evaluate on Out-of-Sample Test Set
-predictions <- predict(elastic_net_model, newdata = test_data)
-
-test_rmse <- RMSE(predictions, test_data$west)
-test_mae  <- MAE(predictions, test_data$west)
-test_r2   <- cor(predictions, test_data$west)^2
-
-cat("--- Out-of-Sample Test Performance (Time-Based Split) ---\n")
-cat("Test RMSE:", test_rmse, "\n")
-cat("Test MAE:", test_mae, "\n")
-cat("Test R-squared:", test_r2, "\n")
-
-# E. Extract Final Model Coefficients
-best_alpha <- elastic_net_model$bestTune$alpha
-best_lambda <- elastic_net_model$bestTune$lambda
-
-en_coefs <- coef(elastic_net_model$finalModel, s = best_lambda)
-print(en_coefs)
-
-# F. Visualisation: Coefficient Paths across Lambda (Lab 4 Style)
-lambda_for_plotting <- 10^seq(from = -2, to = 2, length = 100)
-
-en_path_model <- glmnet(
-  x = as.matrix(scale(train_data %>% select(-west))),
-  y = train_data$west,
-  alpha = best_alpha,
-  lambda = lambda_for_plotting
-)
-
-en_path_df <- as.matrix(coef(en_path_model, lambda_for_plotting)) %>%
-  t() %>%
-  as.data.frame() %>%
-  mutate(lambda = lambda_for_plotting)
-
-en_path_df %>%
-  select(-`(Intercept)`) %>%
-  pivot_longer(-lambda, names_to = "variable", values_to = "coef") %>%
-  ggplot(aes(x = lambda, y = coef, colour = variable)) +
-  geom_line() +
-  scale_x_log10() +
-  labs(
-    title = "Elastic Net Regularization Coefficient Paths",
-    subtitle = sprintf("Optimal alpha = %.2f (Chronological Split)", best_alpha),
-    x = "Lambda (log scale)",
-    y = "Coefficient Estimate",
-    colour = "Predictor"
-  ) +
-  theme_minimal()
+print("\n--- Summary Table: Elastic Net Performance Across Horizons ---")
+print(elastic_net_results)
 
 # ==============================================================================
 # PHASE 3: Random Forest
@@ -252,8 +264,8 @@ library(randomForest)
 
 region_cols <- c("north", "south", "east", "west", "central")
 exog_cols   <- c("wind_u", "wind_w", "mean_wind_spd",
-                 "daily_frp_Sumatra", "daily_frp_Kalimantan",
-                 "daily_count_Sumatra", "daily_count_Kalimantan",
+                 "daily_frp_Sumatra", 
+                 "daily_count_Sumatra",
                  "smoke_transport_Sumatra")
 
 build_horizon_data <- function(df, h, n_lags = 5) {
