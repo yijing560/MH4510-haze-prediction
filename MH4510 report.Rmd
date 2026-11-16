@@ -13,31 +13,161 @@ output:
     toc_depth: 3
     number_sections: true
     latex_engine: xelatex
+    extra_dependencies: ["float"]
 ---
 
 # Introduction
-Thousands of blazes that have erupted in 2026 can be acrued to human activity, whether intentionally or accidental. A common reason is to clear land. Using fire is an inexpensive and fast way to prepare the ground for agriculture and plantations. The fires are also used to dispose of waste, especially in places with non-existent rubbish collection. Many fire hot spots also overlap with peatlands which are naturally wet ecosystems that become highly flammable when drained for plantation. With an exceptionally powerful El Nino this year, the fires can grow out of control rapidly, especially during prolonged dry spells. This has resulted in hazardous smoke spreading across the region. The smoke was then carried northwards by winds from the south, affecting neighbouring countries including Singapore. Transboundary haze pose significant environmental and public health threats to the region. With the haze-belching fires in Kalimantan and Sumatra driving Pollutant Standards Index (PSI) levels up, monitoring and predicting the magnitude of pollutants in the air across Singapore is critical for public health advisories (Rayda, 2026) (Mungcal et al., 2026). This project aims to accurately forecast regional air quality pollution levels across Singapore by leveraging on temporal dependencies and cross-station spatial patterns. By providing the framework, it would help deliver insights on the public health advisories such as outdoor activity restrictions, which ultimately mitigates acute respiratory and cardiovascular health risks. 
+Thousands of blazes that have erupted in 2019 can be acrued to human activity, whether intentionally or accidental. A common reason is to clear land. Using fire is an inexpensive and fast way to prepare the ground for agriculture and plantations. The fires are also used to dispose of waste, especially in places with non-existent rubbish collection. Many fire hot spots also overlap with peatlands which are naturally wet ecosystems that become highly flammable when drained for plantation. With an exceptionally powerful El Nino this year, the fires can grow out of control rapidly, especially during prolonged dry spells. This has resulted in hazardous smoke spreading across Singapore. The smoke was then carried northwards by winds from the south, affecting neighbouring countries including Singapore. Transboundary haze pose significant environmental and public health threats to the region. With the haze-belching fires in  Sumatra driving Pollutant Standards Index (PSI) levels up, monitoring and predicting the magnitude of pollutants in the air across Singapore is critical for public health advisories (Rayda, 2026) (Mungcal et al., 2026). When PSI levels surge past unhealthy standards, citizens have to change their way of life: outdoor school activities and sports are suspended, public events are restricted and and are advised to stay indoors. 
+
 ## Literature Review 
-Traditional air quality forecasting approaches such as Multiple Linear Regression mainly rely on linear assumptions and have long served as standard baseline for air quality (Abdullah et al., 2020). Conversely, Machine Learning techniques account for non-linear relationships and time-lagged variables. Machine Leaning modeling frameworks such as Random Forest (RF), Artificial Neural Network (ANN) and Long Short-Term Memory (LSTM) have started to emerge as a way to effectively predict air quality (Palanichamy et al., 2022). Thus, this project investigates several machine learning algorithms for forecasting haze levels in Singapore, ultimately providing relevant information to responsible parties which allows them to mitigate and plan precautionary measures. 
+Traditional air quality forecasting approaches such as Multiple Linear Regression mainly rely on linear assumptions and have long served as standard baseline for air quality (Abdullah et al., 2020). Conversely, Machine Learning techniques account for non-linear relationships and time-lagged variables. Machine Leaning modeling frameworks such as Random Forest (RF), Artificial Neural Network (ANN) and Long Short-Term Memory (LSTM) have started to emerge as a way to effectively predict air quality (Palanichamy et al., 2022). Futhermore, Spatial Autoregressive model such as Vector Autoregressive Exogenous systems and Spatial Autoregressive models can be used to model how pollutants diffuse across interconnected geographic locations. Thus, this project investigates several machine learning algorithms for forecasting haze levels in Singapore, ultimately providing relevant information to responsible parties which allows them to mitigate and plan precautionary measures. 
+
+##Problem Statement 
+The problem statement centers on the operational challenge faced by public health authorities, which is mitigating the reporting latency between smoke generated by Indonesia and public health advisories in Singapore. Without predictive tools, authorities risk reacting only after the haze has covered Singapore. Thus, this project aims to accurately forecast regional air quality pollution levels across Singapore before the haze covers the island, by leveraging on temporal dependencies and cross-station spatial patterns. By providing the framework, it would help provide crucial preparation time to issue public health advisories, distribute masks, which ultimately mitigates acute respiratory and cardiovascular health risks. 
+
 # Data
-## Data Preparation
+The analyses uses 4 historical datasets compiled from official environmental monitoring networks and satellite remote sensing repositories. Regional air quality data which captures PM2.5 every hour, meteorological wind data which includes wind direction and wind speeds across Singapore are sourced from The National Environment Agency (NEA). Satellite fire hotspot data is obtained from NASA's Fire Information for Resource Management System (FIRMS) fire archive. 
+
+## Data Cleaning
+Before analyzing, we cleaned the data to obtain a structured dataset. For satellite fire hotspot data, only those with a confidence score of 30% or higher were retained to eliminate false alarms. These fire records were then cleaned to only include the Sumatra region as the source based on their geographic coordinates. The records were aggregated daily to compute total Fire Radiative Power and cumulative fire counts. 
+
+Meteorological wind data were cleaned by restricting the data to 5 representative monitoring stations in Singapore. Timestamps were standardized to uniform hourly blocks. To ensure wind dynamics could be interpreted linearly by the models, circular wind direction and wind speed were decomposed into orthogonal Cartesian velocity vectors. This gave East-West and North-South velocity components, where positive values represent winds from the South. 
+
+Regional air quality data was filtered to only Southwest Monsoon haze window from 1 August to 31 October 2019. The hourly air quality data across all monitoring stations, hourly Cartesian wind vectors and daily Sumatra fire aggregates were merged based on the timestamps and dates. Since NASA FIRMS dataset only contains rows for days where a fire is detected, if a day has no fires, there will be no row for that date. Thus, when merging the datasets, any day without recorded fires will have a missing value. These missing values will be explicitly filled with 0, representing 0 fires on those dates.  
+
+# Feature Engineering
+Raw polar coordinates of wind speed and direction were transformed into Cartesian vector components (wind_u and wind_w) using trigonometric conversion:
+$$
+\begin{aligned}
+u &= -\text{speed} \cdot \sin(\theta) \\
+w &= -\text{speed} \cdot \cos(\theta)
+\end{aligned}
+$$
+This isolates the North-South velocity component where positive values represent Southernn wind blowing northward. 
+
+An interaction term was also engineered to model the physical interaction between the fire intensity and wind conditions. This means that Sumatra fire power only contributes to Singapore's pollution influx when southern winds blows northwards.
+$$\text{smoke\_transport\_Sumatra} = \max(0, \text{wind}_w) \times \text{daily\_frp\_Sumatra}$$
 
 # Exploratory Data Analysis (EDA)
-##Regional PSI Trends Across Singapore
+To understand the severity and distribution of the 2019 transboundary haze, a summary table and multi-series line plot were constructed. 
+
+By aggregating mean and maximum PSI levels across 4 geographic zones, the summary table serves to test whether the haze particles are evenly distributed or concentrated in certain areas. Table 1 shows that the West and South regions record higher mean and peak PSI values, which validates how the Southwest Monsoon winds drive haze northwards to Singapore. 
+```{r summary-table, echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Source your analysis script to load long_data into the environment
+source("MH4510 project-haze prediction.R")
+```
+
+```{r, echo=FALSE}
+# Generate the formatted LaTeX table with caption on top
+knitr::kable(
+  long_data %>% 
+    group_by(location) %>% 
+    summarise(
+      Mean = round(mean(PSI_Level, na.rm = TRUE), 1),
+      Max = max(PSI_Level, na.rm = TRUE)
+    ) %>% 
+    rename("Region" = location, "Max PSI" = Max),
+  format = "latex",
+  booktabs = TRUE,
+  caption = "Summary Statistics of Regional PSI Levels During the 2019 Peak Haze Window",
+  align = c("l", "c", "c")
+)
+```
+
+
+The multi-series line plot allows us to visualize how air quality is like across Singapore. Figure 1 shows a sharp synchronized spikes during mid-October and late October across the regions, confirming that transboundary haze is an island-wide crisis engulfing all regions concurrently. 
+
+```{r eda-plot, echo=FALSE, out.width="85%", fig.align='center', fig.cap="Regional PM2.5/PSI Trends Across Singapore During the 2019 Peak Haze Window", fig.pos='H'}
+# Ensure "EDA_plot.png" has already been generated by your analysis script
+knitr::include_graphics("EDA_plot.png")
+```
 
 # Methodologies 
 ## Elastic Net Regression (Baseline Regularized Model)
+Elastic Net regularizes regression framework was implemented to forecast the West region's PSI levels at $t+1$ hour and $t+6$ hours, while handling multicollinearity among spatial monitoring stations. Elastic Net combines both Lasso and Ridge penalties to perform simultaneous variable selection and coefficient shrinkage. 
+
+The feature space was constructed using temporal autoregressive lags across the 5 regional monitoring stations, spanning 0 to 5 hours and yielding 25 predictor variables. Prior to model fitting, all features were centered and scaled ($\text{preProcess} = c(\text{"scale"})$).
+
+To prevent data leakage and simulate real-world forecasting performance during high-stakes pollution events, a strict chronological time-based split was enforced, utilizing August 1 to October 20, 2019 for training and October 21 to October 31, 2019 for out-of-sample testing. Hyperparameter tuning was conducted via 5-fold cross-validation over a grid of mixing parameters ($\alpha$) and penalty multipliers ($\lambda$). Out-of-sample forecasting accuracy across the test window was evaluated  using Mean Absolute Error (MAE).
+
 ## Random Forest
-Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra and Kalimantan, together with the Sumatra smoke-transport interaction term. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The data are split by time (training: 1 August to 10 October 2019; testing: 11 to 31 October 2019) to avoid leaking future observations into training. As this split is deterministic, all models in the group are evaluated on the same test set. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and fire/smoke transport to assess whether local persistence or upstream burning dominates as the horizon lengthens. Forecasts are compared against the elastic net and a persistence benchmark (forecast = current west PSI) using RMSE, MAE and $R^2$.
+Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The data are split by time (training: 1 August to 10 October 2019; testing: 11 to 31 October 2019) to avoid leaking future observations into training. As this split is deterministic, all models in the group are evaluated on the same test set. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and fire/smoke transport to assess whether local persistence or upstream burning dominates as the horizon lengthens. Forecasts are compared against the elastic net and a persistence benchmark (forecast = current west PSI) using RMSE, MAE and $R^2$.
 
 ## VARX Spatio-Temporal Model
 To capture spatial inter-dependencies across Singapore’s five geographic zones simultaneously, we fit a Vector Autoregressive Exogenous (VARX) model. Unlike single-region regressors that forecast zones in isolation, the VARX framework models the five regional air quality series as an interconnected endogenous vector system, $\mathbf{Y}_t = [\text{North}_t, \text{South}_t, \text{East}_t, \text{West}_t, \text{Central}_t]^T$, driven by exogenous wind vectors and Indonesian smoke advection inputs, $\mathbf{X}_t$. The exogenous feature matrix $\mathbf{X}_t$ comprises wind velocity components ($u$, $w$), daily fire radiative power in Sumatra, and the Sumatra smoke-transport interaction term. Stationarity across all five series in $\mathbf{Y}_{\text{train}}$ was verified using Augmented Dickey-Fuller (ADF) tests. Optimal lag length $p$ for the endogenous components was selected via `VARselect()` by minimizing the Akaike Information Criterion (AIC) up to a maximum lag of 10 hours. Directional transmission across regional pairs under prevailing monsoonal winds was evaluated using pairwise Granger causality tests (`causality()`). To trace how incoming smoke fronts physically diffuse across the island network, orthogonalized Impulse Response Functions (IRFs) were simulated over a 24-hour horizon following a 1-unit shock at entry regions (South and West). Finally, multi-step out-of-sample forecasts were generated on the test set (11 to 31 October 2019) using `predict()` with exogenous test inputs $\mathbf{X}_{\text{test}}$, and evaluated on the West region using RMSE, MAE, and $R^2$.
 
-## Conformal Coverage
+## Spatial Autoregressive 
 ## TBC
 
 # Results
-## Model Evaluation and Comparison 
+## Elastic Net
+Through 5-fold cross-validation, the model selected optimal tuning parameters of $\alpha = 0.5$ and $\lambda = 0.1$. This configuration reflects an even mixture of $L_1$ (Lasso) feature selection and $L_2$ (Ridge) coefficient shrinkage. The model achieved an out-of-sample Test MAE of 5.44 while the sparse coefficient matrix reveals that short-term pollutant persistence is heavily affected by immediate temporal proximity. Specifically, 1-hour historical lags have the strongest positive coefficients. Higher-order temporal lags (such as lags 3 to 5) were heavily shrunk or driven entirely to zero, indicating that immediate 1-hour momentum dictates short-horizon air quality states.
+```{r enet-coef-t1, include = FALSE}
+library(knitr)
+library(Matrix)
+
+best_lambda <- model_t1$bestTune$lambda
+coef_mat_t1 <- as.matrix(coef(model_t1$finalModel, s = best_lambda))
+
+coef_df_t1 <- data.frame(
+  Feature = rownames(coef_mat_t1),
+  Coefficient = round(coef_mat_t1[, 1], 4)
+)
+```
+
+```{r enet-table-t1, echo=FALSE, results='asis',message=FALSE, warning=FALSE}
+# This chunk has NO include=FALSE. It only outputs the kable table cleanly.
+knitr::kable(
+  coef_df_t1,
+  format = "latex",
+  booktabs = TRUE,
+  position = "H",
+  col.names = c("Predictor Feature", "Coefficient"),
+  caption = "Elastic Net Sparse Coefficient Estimates (t+1 Horizon)",
+  align = c("l", "c")
+)
+cat("\n\\normalsize\n")
+
+```
+
+```{r enet-path-t1, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.width=6, fig.height=3.5, out.width="65%", fig.cap="Elastic Net Regularization Path and Coefficient Shrinkage across Penalty Parameter Lambda (t+1 Horizon)", fig.pos='H'}
+# Directly plot the glmnet regularization path from the final model
+plot(model_t1$finalModel, xvar = "lambda", label = FALSE)
+```
+
+At the multi-step 6-hour horizon, cross-validation selected $\alpha = 0$ and $\lambda = 1$. This parameter combination collapses the Elastic Net penalty into pure Ridge regression. The model achieved an out-of-sample Test MAE of 7.38. As expected, predicting further into the future leads to larger errors because unpredictable weather shifts accumulate over time. Unlike the sparse feature selection observed at $t+1$, the multi-step horizon benefited from retaining all 25 lagged predictors without aggressive feature zeroing. Since predicting PSI levels at $t+6$ hours requires capturing complex, island-wide weather patterns, retaining all past time data rather helps the model stay stable against sudden wind or weather changes.
+```{r enet-coef-t6, include=FALSE}
+
+best_lambda_t6 <- model_t6$bestTune$lambda
+coef_mat_t6 <- as.matrix(coef(model_t6$finalModel, s = best_lambda_t6))
+
+coef_df_t6 <- data.frame(
+  Feature = rownames(coef_mat_t6),
+  Coefficient = round(coef_mat_t6[, 1], 4)
+)
+```
+
+```{r enet-table-t6, echo=FALSE, results='asis',message=FALSE, warning=FALSE}
+# This chunk has NO include=FALSE. It only outputs the kable table cleanly.
+knitr::kable(
+  coef_df_t6,
+  format = "latex",
+  booktabs = TRUE,
+  position = "H",
+  col.names = c("Predictor Feature", "Coefficient"),
+  caption = "Elastic Net Sparse Coefficient Estimates (t+6 Horizon)",
+  align = c("l", "c")
+)
+cat("\n\\normalsize\n")
+```
+
+```{r enet-path-t6, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.width=6, fig.height=3.5, out.width="65%", fig.cap="Elastic Net Regularization Path and Coefficient Shrinkage across Penalty Parameter Lambda (t+6 Horizon)", fig.pos='H'}
+# Directly plot the glmnet regularization path for t+6
+plot(model_t6$finalModel, xvar = "lambda", label = FALSE)
+```
+
+## Random Forest 
+ 
 ### Forecast Accuracy at $t+1$ and $t+6$ Hours
 The table below compares the Random Forest against the elastic net and a persistence benchmark (forecast = current west PSI) on the test set (11 to 31 October 2019). For a like-for-like comparison, the elastic net was refitted on the same time-based split and feature set, so its figures here may differ from the Phase 2 baseline, which uses lagged PSI only.
 
@@ -118,14 +248,64 @@ Across the 504-step holdout test set, the VARX model achieved an RMSE of 11.17 $
 
 As shown in Figure 3, the VARX forecast (red dashed line) generates a smoothed trajectory that successfully captures the macro-level trend and low-frequency accumulation cycles over the 3-week test period, correctly identifying major haze build-ups around mid-October (14–16 Oct) and late October (24–25 Oct). Because the linear system minimizes overall mean squared error, it acts as a low-pass filter that dampens sharp hourly volatility and underpredicts extreme peaks. During sudden mid-month surges, autoregressive lags introduce a minor phase delay, whereas toward late October, updated wind vector changes ($\mathbf{X}_t$) act as leading indicators, pulling predictions downward slightly before ground-level sensors register concentration drops.
 
-## Conformal Coverage
+## Spatial Autoregressive 
 ## TBC
 
-# Results
-## Model Evaluation and Comparison 
+## Model Evaluation and Comparison
+```{r model-comparison-table, echo=FALSE, message=FALSE, warning=FALSE, }
+library(knitr)
+library(dplyr)
+
+# Helper function to extract MAE safely from your script's result data frames
+extract_mae <- function(df, model_name, hor, model_col = "model", hor_col = "horizon") {
+  res <- df %>% filter(.data[[model_col]] == model_name, .data[[hor_col]] == hor)
+  if (nrow(res) > 0) {
+    return(round(res$MAE[1], 2))
+  } else {
+    return("Pending")
+  }
+}
+
+# Build the comparison table dynamically from your script's output objects
+comparison_df <- data.frame(
+  Model_Architecture = c(
+    "Elastic Net (Linear Baseline)", 
+    "Random Forest (Non-Linear Tree)", 
+    "VARX (Spatio-Temporal)", 
+    "Spatial Autoregressive (SAR)"
+  ),
+  MAE_t1 = c(
+    extract_mae(elastic_net_results, "Elastic Net", "t+1 hr"),
+    extract_mae(phase3_results, "Random Forest", "t+1 hr"),
+    extract_mae(phase4_results, "VARX", "t+1 hr"),
+    extract_mae(phase5_results, "SAR", "t+1 hr", model_col = "Model", hor_col = "Horizon")
+  ),
+  MAE_t6 = c(
+    extract_mae(elastic_net_results, "Elastic Net", "t+6 hr"),
+    extract_mae(phase3_results, "Random Forest", "t+6 hr"),
+    extract_mae(phase4_results, "VARX", "t+6 hr"),
+    extract_mae(phase5_results, "SAR", "t+6 hr", model_col = "Model", hor_col = "Horizon")
+  ),
+  check.names = FALSE
+)
+
+# Render the publication-quality LaTeX table with dynamic cross-referencing
+knitr::kable(
+  comparison_df,
+  format = "latex",
+  booktabs = TRUE,
+  position = "H",
+  col.names = c("Model Architecture", "Test MAE (t+1)", "Test MAE (t+6)"),
+  caption = "Out-of-Sample Forecasting Performance Comparison Across All Model Architectures (Test MAE in $\\mu\\text{g/m}^3$)",
+  align = c("l", "c", "c")
+)
+```
+
 
 #Discussion
+
 ## Key Findings
+
 ## Limitations and Future Work 
 
 # Conclusion 
