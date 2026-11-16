@@ -91,7 +91,7 @@ The feature space was constructed using temporal autoregressive lags across the 
 To prevent data leakage and simulate real-world forecasting performance during high-stakes pollution events, a strict chronological time-based split was enforced, utilizing August 1 to October 20, 2019 for training and October 21 to October 31, 2019 for out-of-sample testing. Hyperparameter tuning was conducted via 5-fold cross-validation over a grid of mixing parameters ($\alpha$) and penalty multipliers ($\lambda$). Out-of-sample forecasting accuracy across the test window was evaluated  using Mean Absolute Error (MAE).
 
 ## Random Forest
-Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The data are split by time (training: 1 August to 10 October 2019; testing: 11 to 31 October 2019) to avoid leaking future observations into training. As this split is deterministic, all models in the group are evaluated on the same test set. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and fire/smoke transport to assess whether local persistence or upstream burning dominates as the horizon lengthens. Forecasts are compared against the elastic net and a persistence benchmark (forecast = current west PSI) using RMSE, MAE and $R^2$.
+Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PSI level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PSI of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. Only Sumatra-based fire radiative power, hotspot counts, and smoke-transport features are included. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. The split is based on the forecast target timestamp: training targets run from 1 August to 20 October 2019, while the untouched test targets run from 21 to 31 October 2019. The same target-date windows are applied at both forecast horizons, and the Random Forest, Elastic Net comparison model and persistence benchmark are evaluated on the same test observations. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and Sumatra fire/smoke transport to assess whether local persistence or upstream inputs become more important as the horizon lengthens. Forecasts are compared using RMSE, MAE and $R^2$.
 
 ## VARX Spatio-Temporal Model
 ### Model Formulation
@@ -191,46 +191,83 @@ plot(model_t6$finalModel, xvar = "lambda", label = FALSE)
 ## Random Forest 
  
 ### Forecast Accuracy at $t+1$ and $t+6$ Hours
-The table below compares the Random Forest against the elastic net and a persistence benchmark (forecast = current west PSI) on the test set (11 to 31 October 2019). For a like-for-like comparison, the elastic net was refitted on the same time-based split and feature set, so its figures here may differ from the Phase 2 baseline, which uses lagged PSI only.
 
-| Horizon | Model | RMSE | MAE | $R^2$ |
-|---|---|---|---|---|
-| $t+1$ hr | Persistence | 6.45 | 4.90 | 0.462 |
-| $t+1$ hr | Elastic Net | 5.79 | 4.62 | 0.493 |
-| $t+1$ hr | Random Forest | 6.23 | 5.02 | 0.443 |
-| $t+6$ hr | Persistence | 9.18 | 7.28 | 0.122 |
-| $t+6$ hr | Elastic Net | 7.87 | 6.15 | 0.152 |
-| $t+6$ hr | Random Forest | 13.30 | 9.87 | 0.030 |
+The table below compares the Random Forest against an Elastic Net model and a persistence benchmark (forecast = current West PSI) on the held-out target period from 21 to 31 October 2019. For a like-for-like comparison, the Elastic Net is refitted in Phase 3 using the same predictors, training window and test window. Its figures may therefore differ from the Phase 2 Elastic Net baseline, which uses lagged PSI predictors only.
 
-At the $t+1$ hr horizon, the elastic net achieved the lowest error (RMSE 5.79). The Random Forest (RMSE 6.23) offered only a small improvement over the persistence benchmark (RMSE 6.45) and did not beat the linear baseline, and its MAE (5.02) was slightly worse than persistence (4.90). All three models explained less than half of the variance ($R^2 \le 0.49$).
+```{r rf-accuracy-table, echo=FALSE, message=FALSE, warning=FALSE}
+phase3_metrics_report <- phase3_results %>%
+  mutate(
+    horizon = factor(horizon, levels = c("t+1 hr", "t+6 hr")),
+    model = factor(
+      model,
+      levels = c("Persistence (naive)", "Elastic Net", "Random Forest")
+    ),
+    RMSE = round(RMSE, 2),
+    MAE = round(MAE, 2),
+    R2 = round(R2, 3)
+  ) %>%
+  arrange(horizon, model) %>%
+  mutate(
+    Horizon = as.character(horizon),
+    Model = as.character(model)
+  ) %>%
+  select(Horizon, Model, RMSE, MAE, R2)
 
-Forecast accuracy deteriorated for every model at $t+6$ hr. The elastic net remained the best model (RMSE 7.87, $R^2$ 0.15), while the Random Forest performed worst (RMSE 13.30, $R^2$ 0.03), doing worse than the persistence benchmark. Figure 1 shows why: the Random Forest tracks actual PSI reasonably well at $t+1$ hr, but at $t+6$ hr it produces large spurious spikes of about 50 PSI in mid and late October (around 13 to 16 October and 24 to 26 October), when observed PSI stayed near 20.
+phase3_best_t1 <- phase3_metrics_report %>%
+  filter(Horizon == "t+1 hr") %>%
+  slice_min(MAE, n = 1, with_ties = FALSE)
+
+phase3_best_t6 <- phase3_metrics_report %>%
+  filter(Horizon == "t+6 hr") %>%
+  slice_min(MAE, n = 1, with_ties = FALSE)
+
+knitr::kable(
+  phase3_metrics_report,
+  format = "latex",
+  booktabs = TRUE,
+  col.names = c("Horizon", "Model", "RMSE", "MAE", "$R^2$"),
+  caption = "Phase 3 forecasting performance on the 21--31 October 2019 test window"
+)
+```
+
+The table is generated from the Phase 3 model outputs whenever this report is knitted, so its values correspond to the current training and test split rather than values from an earlier run. At $t+1$ hour, **`r phase3_best_t1$Model[[1]]`** has the lowest MAE (`r sprintf("%.2f", phase3_best_t1$MAE[[1]])`). At $t+6$ hours, **`r phase3_best_t6$Model[[1]]`** has the lowest MAE (`r sprintf("%.2f", phase3_best_t6$MAE[[1]])`). The Random Forest's values should be compared with both benchmarks at each horizon; a lower test error indicates better out-of-sample accuracy.
 
 ![Random Forest forecasts vs actual west PSI on the test period](forecast_plot.png)
 
 ### Permutation Variable Importance
-Permutation importance was computed for each horizon as the percentage increase in MSE when a predictor is shuffled. To assess whether local persistence or upstream drivers dominate, predictors were grouped into local (west) lags, other-region lags, wind, and fire/smoke transport (see table below, Figure 2). Because the groups contain different numbers of variables, the table also reports the average importance per variable.
 
-| Horizon | Group | Share of total importance | Avg. importance per variable |
-|---|---|---|---|
-| $t+1$ hr | Local (west) lags | 21.1% | 10.8 |
-| $t+1$ hr | Other-region lags | 61.7% | 7.9 |
-| $t+1$ hr | Wind | 5.5% | 5.6 |
-| $t+1$ hr | Fire / smoke transport | 11.8% | 7.3 |
-| $t+6$ hr | Local (west) lags | 13.6% | 8.9 |
-| $t+6$ hr | Other-region lags | 51.2% | 8.3 |
-| $t+6$ hr | Wind | 10.4% | 13.6 |
-| $t+6$ hr | Fire / smoke transport | 24.8% | 19.4 |
+Permutation importance is computed separately at each horizon as the percentage increase in OOB MSE when a predictor is shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and Sumatra fire/smoke transport. Because the groups contain different numbers of variables, the table reports both each group's share of total positive permutation importance and its average importance per variable.
+
+```{r rf-importance-group-table, echo=FALSE, message=FALSE, warning=FALSE}
+phase3_group_report <- phase3_group %>%
+  mutate(
+    Share = scales::percent(share, accuracy = 0.1),
+    `Average importance per variable` = round(avg_importance, 2)
+  ) %>%
+  select(
+    Horizon = horizon,
+    Group = group,
+    Share,
+    `Average importance per variable`
+  )
+
+knitr::kable(
+  phase3_group_report,
+  format = "latex",
+  booktabs = TRUE,
+  caption = "Random Forest permutation importance by predictor group"
+)
+```
 
 ![Share of permutation importance by predictor group](group_plot.png)
 
-At $t+1$ hr, lagged PSI readings account for most of the importance (local lags 21.1% and other-region lags 61.7%), and local lags have the highest importance per variable. This indicates that short-term forecasts are driven mainly by recent PSI persistence and cross-station spatial patterns. At $t+6$ hr, the share of local lags falls to 13.6%, while the shares of fire/smoke transport (11.8% to 24.8%) and wind (5.5% to 10.4%) roughly double, and each fire variable becomes more than twice as important as a typical lag variable.
+The group-level table and chart are recalculated from the current Random Forest fits. Compare the relative contributions across $t+1$ and $t+6$ hours to see whether recent PSI readings, wind, or Sumatra fire/smoke features gain importance as the forecast horizon lengthens. Importance is a measure of how much the fitted model relies on a predictor; it does not, by itself, establish a causal effect or guarantee better forecasting accuracy.
 
 ![Permutation importance of the top 15 predictors](importance_plot.png)
 
-Figure 3 shows the top 15 predictors at each horizon. At $t+1$ hr, the most important variables are the most recent PSI readings across all regions (e.g. `Lag_west_0`, `Lag_north_0`, `Lag_central_0`), with fire variables ranking lower. At $t+6$ hr the ranking changes: Sumatra and Kalimantan fire radiative power (`daily_frp_Sumatra`, `daily_frp_Kalimantan`), the hotspot counts, the smoke-transport term, and the north-south wind component (`wind_w`) all enter the top eight, together with only two PSI lags (`Lag_east_0`, `Lag_west_1`). Upstream burning and southerly wind transport therefore become the dominant signals as the horizon lengthens, while local persistence fades.
+The top-15 chart ranks the predictors actually used by the fitted model at each horizon. The fire-related variables available to this Random Forest are `daily_frp_Sumatra`, `daily_count_Sumatra`, and `smoke_transport_Sumatra`. Any change in the ranking between horizons should therefore be interpreted in terms of the Sumatra fire and smoke-transport variables, wind conditions, and lagged regional PSI readings.
 
-However, higher importance does not imply better forecasts. The $t+6$ hr Random Forest, which relies most on the fire variables, generalised worst to the October test period. A possible reason is that the fire variables are daily values that are constant within each day, so the forest may have used them to memorise the training days rather than learn a relationship that holds in October. Future work could use lagged or smoothed fire features and time-series cross-validation to reduce this.
+Daily Sumatra fire features are constant within a given day. This may limit how well the model generalises to later dates if it learns day-specific patterns rather than a stable relationship between upstream fire activity and Singapore PSI. The recalculated test-set metrics should be used to assess whether this limitation is reflected in the model's out-of-sample performance.
 
 ## VARX Spatio-Temporal Model
 
