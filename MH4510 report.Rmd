@@ -102,27 +102,27 @@ We tune six linear configurations ($C=2^{-4},\ldots,2^1$), eight polynomial conf
 
 ## VARX Spatio-Temporal Model
 ### Model Formulation
-To model Singapore's five regional air quality series simultaneously rather than in isolation, we implement a **Vector Autoregressive Exogenous ($\text{VARX}(p)$)** system to capture inter-regional temporal dependencies across the island alongside external wind and fire conditions:
+To model Singapore's five regional air quality series simultaneously rather than in isolation, we implement a Vector Autoregressive Exogenous ($\text{VARX}(p)$) system to capture inter-regional temporal dependencies across the island alongside external wind and fire conditions:
 
-$$\mathbf{Y}_t = \mathbf{c} + \sum_{i=1}^{p} \mathbf{A}_i \mathbf{Y}_{t-i} + \mathbf{B} \mathbf{X}_t + \boldsymbol{\varepsilon}_t$$
+$$Y_t = c + \sum_{i=1}^{p} A_i Y_{t-i} + B X_t + \varepsilon_t$$
 
 where:
 
-* $\mathbf{Y}_t = [\text{North}_t, \text{South}_t, \text{East}_t, \text{West}_t, \text{Central}_t]^\top \in \mathbb{R}^5$ is the endogenous vector of hourly regional $\text{PM}_{2.5}$ concentrations.
-* $\mathbf{X}_t = [\text{wind\_u}_t, \text{wind\_w}_t, \text{daily\_frp\_Sumatra}_t, \text{smoke\_transport\_Sumatra}_t]^\top \in \mathbb{R}^4$ is the exogenous vector capturing East-West and North-South wind velocity components, daily Sumatran Fire Radiative Power (FRP), and wind-driven smoke advection.
-* $\mathbf{c}$ is a $5 \times 1$ intercept vector, $\mathbf{A}_i$ are $5 \times 5$ endogenous lag coefficient matrices capturing inter-regional diffusion, $\mathbf{B}$ is a $5 \times 4$ exogenous impact matrix, and $\boldsymbol{\varepsilon}_t$ is a vector white-noise innovation process.
+* $Y_t = [\text{North}_t, \text{South}_t, \text{East}_t, \text{West}_t, \text{Central}_t]^\top \in \mathbb{R}^5$ is the endogenous vector of hourly regional $\text{PM}_{2.5}$ concentrations.
+* $X_t = [\text{wind\_u}_t, \text{wind\_w}_t, \text{daily\_frp\_Sumatra}_t, \text{smoke\_transport\_Sumatra}_t]^\top \in \mathbb{R}^4$ is the exogenous vector capturing East-West and North-South wind velocity components, daily Sumatran Fire Radiative Power (FRP), and wind-driven smoke advection.
+* $c$ is a $5 \times 1$ intercept vector, $A_i$ are $5 \times 5$ endogenous lag coefficient matrices capturing inter-regional diffusion, $B$ is a $5 \times 4$ exogenous impact matrix, and $\varepsilon_t$ is a vector white-noise innovation process.
 
 ### Stationarity Verification & Lag Order Selection
-Valid VAR estimation requires all endogenous time series to be stationary so that parameter estimates remain consistent over time. Prior to fitting the model on the training set (August 1 – October 20, 2019; $n = 1,944$ hourly observations), we apply the **Augmented Dickey-Fuller (ADF)** test to each regional series in $\mathbf{Y}_{\text{train}}$. Next, we determine the optimal autoregressive lag order $p \in \{1, \dots, 10\}$ by minimising the **Akaike Information Criterion (AIC)**, balancing model fit against parameter complexity.
+Valid VAR estimation requires all endogenous time series to be stationary so that parameter estimates remain consistent over time. Prior to fitting the model on the training set (August 1 – October 20, 2019; $n = 1,944$ hourly observations), we apply the Augmented Dickey-Fuller (ADF) test to each regional series in $Y_{\text{train}}$. Next, we determine the optimal autoregressive lag order $p \in \{1, \dots, 10\}$ by minimising the Akaike Information Criterion (AIC), balancing model fit against parameter complexity.
 
 ### Spatial Transmission & Diffusion Indicators
 To test our physical advection hypothesis under the Southwest Monsoon, we conduct two diagnostics on the fitted $\text{VARX}(p)$ system:
 
-1. **Granger Causality Tests:** Using Wald $F$-tests (`causality()`), we evaluate whether past $\text{PM}_{2.5}$ values in an upwind source region (specifically South and West) provide statistically significant predictive information for future $\text{PM}_{2.5}$ levels across the remaining regions beyond their own historical lags.
-2. **Impulse Response Functions (IRFs):** Over a 24-hour window, we simulate a sudden $\text{PM}_{2.5}$ spike entering the South and West zones individually to trace how strongly and how quickly the smoke diffuses across the rest of the island.
+1. Granger Causality Tests: We evaluate whether past $\text{PM}_{2.5}$ values in an upwind source region (specifically South and West) provide statistically significant predictive information for future $\text{PM}_{2.5}$ levels across the remaining regions beyond their own historical lags.
+2. Impulse Response Functions (IRFs): Over a 24-hour window, we simulate a sudden $\text{PM}_{2.5}$ spike entering the South and West zones individually to trace how strongly and how quickly the smoke diffuses across the rest of the island.
 
 ### Out-of-Sample Forecast Evaluation
-To ensure a direct and leak-free comparison against the other models in this study, we evaluate the fitted $\text{VARX}(p)$ system chronologically on the untouched holdout test window from October 21 to October 31, 2019. At each forecast origin $t$, we recursively generate multi-step predictions for both short-term ($t+1\text{ hr}$) and medium-term ($t+6\text{ hr}$) horizons using the estimated coefficient matrices $\hat{\mathbf{A}}_1, \dots, \hat{\mathbf{A}}_p$ and $\hat{\mathbf{B}}$. Forecast accuracy on the **West** region is quantified using Mean Absolute Error ($\text{MAE}$).
+To ensure a direct and leak-free comparison against the other models in this study, we evaluate the fitted $\text{VARX}(p)$ system chronologically on the untouched holdout test window from October 21 to October 31, 2019. At each forecast origin $t$, we recursively generate multi-step predictions for both short-term ($t+1\text{ hr}$) and medium-term ($t+6\text{ hr}$) horizons using the estimated coefficient matrices $\hat{A}_1, \dots, \hat{A}_p$ and $\hat{B}$. Forecast accuracy on the West region is quantified using Mean Absolute Error ($\text{MAE}$).
 
 
 ## Spatial Autoregressive
@@ -330,10 +330,10 @@ These results are conditional on the tested kernel grids and three validation bl
 ## VARX Spatio-Temporal Model
 
 ### Stationarity and Optimal Lag Order
-All five regional $\text{PM}_{2.5}$ training series yield Augmented Dickey-Fuller $p$-values below $0.01$, rejecting the null hypothesis of non-stationarity and confirming that the series are stable in levels without needing differencing. Minimising the Akaike Information Criterion (AIC) identifies an optimal lag order of **$p = 3$**, indicating that regional air quality depends primarily on the preceding 3 hours of island-wide particulate levels alongside external wind and fire inputs.
+All five regional $\text{PM}_{2.5}$ training series yield Augmented Dickey-Fuller $p$-values below $0.01$, rejecting the null hypothesis of non-stationarity and confirming that the series are stable in levels without needing differencing. Minimising the Akaike Information Criterion (AIC) identifies an optimal lag order of $p = 3$, indicating that regional air quality depends primarily on the preceding 3 hours of island-wide particulate levels alongside external wind and fire inputs.
 
 ### Directional Smoke Transmission (Granger Causality)
-Both South and West regions yield highly significant Granger causality results ($p < 0.001$), proving that past $\text{PM}_{2.5}$ surges entering Singapore's southern and western boundaries statistically improve predictions of subsequent pollution across the rest of the island. Notably, North, East, and Central regions also return statistically significant $p$-values ($p < 0.001$), which reflects Singapore's small geographical size. This allows wind circulation to mix smoke across neighbouring zones within hours, resulting in a strong spatial interdependence that also directly motivates the **Spatial Autoregressive (SAR)** model explored in following sections.
+Both South and West regions yield highly significant Granger causality results ($p < 0.001$), proving that past $\text{PM}_{2.5}$ surges entering Singapore's southern and western boundaries statistically improve predictions of subsequent pollution across the rest of the island. Notably, North, East, and Central regions also return statistically significant $p$-values ($p < 0.001$), which reflects Singapore's small geographical size. This allows wind circulation to mix smoke across neighbouring zones within hours, resulting in a strong spatial interdependence that also directly motivates the Spatial Autoregressive (SAR) model explored in following sections.
 
 ### Impulse Response Function (IRF) Simulations
 The 24-hour IRF simulations illustrate how a sudden smoke spike spreads across the island depending on the point of entry:
@@ -342,8 +342,8 @@ The 24-hour IRF simulations illustrate how a sudden smoke spike spreads across t
 knitr::include_graphics(c("South IRF.png", "West IRF.png"))
 ```
 
-* **South Shock Propagation:** Following a sudden spike in the South, southern $\text{PM}_{2.5}$ peaks immediately ($h = 0$) before dissipating steadily over the next 15–20 hours. Across all other regions, responses climb rapidly and peak roughly **2 hours later**, demonstrating rapid inland dispersion.
-* **West Shock Propagation:** Following a sudden spike in the West, western $\text{PM}_{2.5}$ drops steeply within the first 2 hours before a small rebound after 4 hours, likely reflecting recirculated air feedback. As compared to a southern entry, the spillover peaks in other regions are smaller in magnitude and occur **4 hours post-shock**. Geographically, the West region sits along the far western edge of the island, meaning smoke plumes entering from the west would require a longer transit window to reach other regions.
+* South Shock Propagation: Following a sudden spike in the South, southern $\text{PM}_{2.5}$ peaks immediately ($h = 0$) before dissipating steadily over the next 15–20 hours. Across all other regions, responses climb rapidly and peak roughly 2 hours later, demonstrating rapid inland dispersion.
+* West Shock Propagation: Following a sudden spike in the West, western $\text{PM}_{2.5}$ drops steeply within the first 2 hours before a small rebound after 4 hours, likely reflecting recirculated air feedback. As compared to a southern entry, the spillover peaks in other regions are smaller in magnitude and occur 4 hours post-shock. Geographically, the West region sits along the far western edge of the island, meaning smoke plumes entering from the west would require a longer transit window to reach other regions.
 
 ### Forecast Accuracy at $t+1$ and $t+6$ Hours
 Across the October 21–31 window, the $\text{VARX}(3)$ model achieves an $\text{MAE}$ of $4.45\ \mu\text{g/m}^3$ at the $t+1\text{ hr}$ horizon, which increases to $6.86\ \mu\text{g/m}^3$ at the $t+6\text{ hr}$ horizon.
