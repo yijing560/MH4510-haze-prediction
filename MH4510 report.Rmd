@@ -446,9 +446,9 @@ knitr::kable(
 
 
 \clearpage
+# Discussion
 
 ## Key Findings
-
 **Forecast performance depends on the prediction horizon.** Among the five implementations in Section 6.6, SAR has the lowest one-hour West-region MAE (`r sprintf("%.2f", sar_report_t1$MAE)`), followed by VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+1 hr"])`) and SVM (`r sprintf("%.2f", svm_report_t1$MAE)`). At six hours, SVM (`r sprintf("%.2f", svm_report_t6$MAE)`) and VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+6 hr"])`) give the lowest point estimates. Their approximately 0.01 difference is insufficient to establish a meaningful advantage without uncertainty analysis. No single model is best at both horizons.
 
 **Recent pollution readings are informative, but abrupt changes remain difficult to anticipate.** MAE increases from one to six hours for every model in the comparison. Elastic Net's coefficient analysis highlights the contribution of recent regional readings, while the forecast plots show increasing smoothing, delayed responses and missed peaks at the longer horizon. These patterns support short-term forecasting from observed pollution history, but indicate that six-hour forecasts provide less reliable information about the timing and magnitude of sudden surges.
@@ -456,8 +456,6 @@ knitr::kable(
 **Additional nonlinear flexibility does not automatically improve generalisation.** Validation selects linear SVMs over the tested polynomial and radial alternatives at both horizons. Random Forest records MAEs of 5.53 and 8.58, exceeding the persistence benchmark's 4.56 and 7.70, respectively; it also underperforms the matched Phase 3 Elastic Net. The Phase 2 Elastic Net baseline achieves 5.44 and 7.38. Together, these results favour carefully regularised or structured models over assuming that a more flexible model will perform better. Different predictor sets and tuning procedures mean that the overall ranking describes these fitted implementations rather than an isolated effect of model architecture.
 
 **Spatial information contributes predictive value, while environmental importance varies with horizon.** SAR has slightly lower MAE than OLS at both horizons when using the same inputs and fixed neighbour links. Positive rho estimates and VARX's regional predictive relationships support modelling dependence across Singapore. Random Forest assigns the largest aggregate importance share to other-region lags, although that group contains more predictors. Wind and fire/smoke importance shares increase at six hours, suggesting greater model reliance on environmental inputs as local persistence weakens. These associations and model-based IRFs do not by themselves prove physical smoke transport. Findings remain specific to the 2019 holdout period and retrospective daily fire features, so operational use requires further time-based validation with inputs available at each forecast origin.
-
-# Discussion
 
 ## Limitations and Future Work 
 
