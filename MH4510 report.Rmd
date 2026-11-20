@@ -134,6 +134,23 @@ The matrix $W$ defines fixed neighbour links. Central connects to all four outer
 
 Training targets run from August to 20 October 2019, and testing targets cover 21--31 October. The model calculates all five regional forecasts together without using their observed future pollution levels. Forecast accuracy is compared with OLS using the same inputs. West-region MAE is reported to match the other model comparisons.
 
+## Conformal Coverage
+Point forecasts provide an expected pollution concentration, but planning outdoor activities also requires understanding how far actual concentrations might depart from that forecast. We therefore used split conformal prediction to quantify uncertainty in one-hour-ahead West-region PM$_{2.5}$ forecasts.
+
+A separate Elastic Net model used the preceding five hourly pollution readings from each of Singapore's five regions. These 25 lagged features represent recent local conditions and cross-regional persistence. Three additional features used the preceding hour's wind speed and directional components. Complete same-day fire totals were excluded because they can contain detections recorded after the forecast origin.
+
+We fitted the model on 1 August–10 October 2019, selected its tuning parameters using expanding-window validation, and reserved 11–20 October for calibration. The final test period was 21–31 October. This calibration experiment therefore used a shorter fitting window than the main model comparison.
+
+For each calibration observation, we calculated the absolute prediction error:
+
+$$s_i = |y_i-\hat{y}_i|.$$
+
+With 240 calibration observations and a nominal coverage target of 95%, we selected the 229th smallest error, using the finite-sample rank $\lceil(240+1)\times0.95\rceil$. This defined the fixed half-width $q$ of each prediction interval:
+
+$$[\hat{y}_t-q,\;\hat{y}_t+q].$$
+
+We evaluated both observed coverage and interval width on the test period. The standard conformal coverage guarantee assumes exchangeability. Since hourly pollution observations can be serially dependent, we interpret our findings as empirical coverage for this particular holdout.
+
 # Results
 ## Elastic Net
 Through 5-fold cross-validation, the model selected optimal tuning parameters of $\alpha = 0.5$ and $\lambda = 0.1$. This configuration reflects an even mixture of $L_1$ (Lasso) feature selection and $L_2$ (Ridge) coefficient shrinkage. The model achieved an out-of-sample Test MAE of 5.44 while the sparse coefficient matrix reveals that short-term pollutant persistence is heavily affected by immediate temporal proximity. Specifically, 1-hour historical lags have the strongest positive coefficients. Higher-order temporal lags (such as lags 3 to 5) were heavily shrunk or driven entirely to zero, indicating that immediate 1-hour momentum dictates short-horizon air quality states.
@@ -390,6 +407,15 @@ knitr::include_graphics("SAR_Spatial_Coefficient.png")
 ```
 
 The estimated spatial coefficient is **`r sprintf("%.3f", phase5_spatial$rho[1])`** at one hour and **`r sprintf("%.3f", phase5_spatial$rho[2])`** at six hours. Both values are positive: after accounting for the other inputs, pollution levels in linked regions tend to move together. The six-hour model has a larger spatial coefficient, but also a larger forecasting error. A stronger spatial relationship therefore does not guarantee a more accurate forecast. These results show a statistical relationship between regions; they do not prove how much smoke physically travels between them.
+
+## Conformal Coverage
+The nominal 95% prediction interval contained 256 of 264 hourly West-region observations, giving 96.97% observed coverage. Its half-width was 12.02 $\mu\mathrm{g/m}^3$, corresponding to a full width of 24.04 $\mu\mathrm{g/m}^3$.
+
+Thus, most observations fell within the interval, although its width indicates substantial uncertainty even one hour ahead. For example, a point forecast of 25 $\mu\mathrm{g/m}^3$ would have an interval of approximately 13–37 $\mu\mathrm{g/m}^3$. Coverage and width should be considered together when assessing the usefulness of these forecasts.
+
+The separate conformal refit achieved a point forecast MAE of 4.57 $\mu\mathrm{g/m}^3$. All three wind coefficients were shrunk to zero, producing the same forecasts as the pollution-lag specification for this split.
+
+The highest test observation was 46 $\mu\mathrm{g/m}^3$, below the project's proposed alert threshold of 55 $\mu\mathrm{g/m}^3$. Consequently, this holdout could not evaluate sensitivity to threshold exceedances. Further validation during more severe haze episodes is needed to assess whether the interval maintains adequate coverage under those conditions.
 
 ## Model Evaluation and Comparison
 ```{r model-comparison-table, echo=FALSE, message=FALSE, warning=FALSE, }
