@@ -7,6 +7,8 @@ author: |
   Dao Le Bao Ngoc \hfill N2601865G \
   Goh Zhe Qi Amanda \hfill U2340128H \
   Ng Li Xin \hfill U \
+abstract: |
+  Transboundary haze from Indonesian peatland fires poses severe public health and environmental risks to Singapore, creating an operational need for early air quality forecasting ahead of smoke arrival. This study evaluates five statistical and machine learning frameworks (Elastic Net, Random Forest, Support Vector Regression (SVM), Vector Autoregressive Exogenous (VARX), and Spatial Autoregressive (SAR) models) to predict regional PM2.5 concentrations in West Singapore at immediate (t+1hr) and extended (t+6hr) horizons during the August–October 2019 haze episode. Hourly regional air quality readings are integrated with Cartesian wind velocity vectors and NASA satellite fire metrics from Sumatra. Models are evaluated using Mean Absolute Error (MAE) over a chronological holdout window (21–31 October 2019). Results show that spatial and regularised linear models outperform non-linear tree ensembles. SAR and VARX(3) models achieved the lowest errors at t+1hr by capturing cross-regional diffusion, while linear SVM and VARX(3) models led at t+6hr. Spatial and causal diagnostics further confirm strong inter-regional dependence, with smoke surges entering from southern and western zones propagating across Singapore within 2 to 4 hours.
 output: 
   pdf_document:
     toc: true
