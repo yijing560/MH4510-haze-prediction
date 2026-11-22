@@ -135,6 +135,43 @@ regional_summary <- long_data %>%
     Max_PSI = max(PSI_Level, na.rm = TRUE)
   )
 print(regional_summary)
+
+# C. EDA Environmental Drivers Summary & Plot (Wind & Sumatra Smoke Transport)
+driver_summary <- master_haze_2019 %>%
+  summarise(
+    `Southerly Wind Share` = scales::percent(mean(wind_w > 0, na.rm = TRUE), accuracy = 0.1),
+    `Mean Northward Wind (knots)` = round(mean(wind_w, na.rm = TRUE), 2),
+    `Mean Sumatra FRP (MW)` = round(mean(daily_frp_Sumatra, na.rm = TRUE), 0),
+    `Mean Smoke Transport` = round(mean(smoke_transport_Sumatra, na.rm = TRUE), 0)
+  )
+print(driver_summary)
+
+eda_drivers_df <- master_haze_2019 %>%
+  select(Timestamp, west, wind_w, smoke_transport_Sumatra) %>%
+  mutate(
+    `West Level` = west,
+    `Northward Wind w` = wind_w,
+    `Smoke Transport` = smoke_transport_Sumatra
+  ) %>%
+  pivot_longer(
+    c(`West Level`, `Northward Wind w`, `Smoke Transport`),
+    names_to = "Series",
+    values_to = "Value"
+  )
+
+eda_drivers_plot <- ggplot(eda_drivers_df, aes(x = Timestamp, y = Value)) +
+  geom_line(colour = "#0072B2", linewidth = 0.4, alpha = 0.85) +
+  facet_wrap(~ Series, ncol = 1, scales = "free_y") +
+  labs(
+    title = "West Haze, Northward Wind, and Smoke Transport",
+    subtitle = "August–October 2019 haze window in Singapore",
+    x = "Timestamp",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(plot.title.position = "plot")
+
+print(eda_drivers_plot)
 # ==============================================================================
 # PART 2: PHASE 2 - ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
 # ==============================================================================
@@ -1048,7 +1085,7 @@ saveRDS(list(results = phase5_results, pooled_results = phase5_pooled_results,
              spatial = phase5_spatial,
              forecasts = phase5_forecasts, fits = phase5_fit), "SAR_Analysis_Outputs.rds")
 # Keep compact objects needed to render the report without rerunning training.
-saveRDS(mget(c("long_data", "model_t1", "model_t6", "elastic_net_results",
+saveRDS(mget(c("long_data","regional_summary", "driver_summary", "model_t1", "model_t6", "elastic_net_results",
                "phase3_results", "phase3_group", "phase3_oob", "phase3_fit",
                "svm_results", "svm_selection", "svm_kernel_summary", "svm_forecasts",
                "phase4_results", "phase5_results", "phase5_pooled_results",
