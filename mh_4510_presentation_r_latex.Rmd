@@ -55,7 +55,7 @@ To deploy and evaluate machine learning algorithms for forecasting haze levels i
 \end{block}
 
 \begin{block}{Exploratory Data Analysis (EDA)}
-Hourly regional observations reveal major mid-September surges exceeding 150 PSI, indicating macro-level pollutant drivers.
+Hourly regional observations reveal major mid-September surges exceeding 150 $\mu\mathrm{g/m}^3$ of PM$_{2.5}$, indicating macro-level pollutant drivers.
 \end{block}
 \begin{columns}[T]
 \begin{column}{0.45\textwidth}
@@ -67,10 +67,10 @@ knitr::kable(
   long_data %>% 
     group_by(location) %>% 
     summarise(
-      Mean = round(mean(PSI_Level, na.rm = TRUE), 1),
-      Max = max(PSI_Level, na.rm = TRUE)
+      Mean = round(mean(PM25, na.rm = TRUE), 1),
+      Max = max(PM25, na.rm = TRUE)
     ) %>% 
-    rename("Region" = location, "Max PSI" = Max),
+    rename("Region" = location, "Maximum" = Max),
   format = "latex",
   booktabs = TRUE
 )
@@ -91,13 +91,13 @@ Serves as our regularized linear baseline, efficiently managing severe multicoll
 
 \begin{block}{Random Forest}
 \small
-\textbf{Objective:} Forecast West-region PSI at $t+1$ and $t+6$ hours.
+\textbf{Objective:} Forecast West-region PM$_{2.5}$ at $t+1$ and $t+6$ hours.
 
 \vspace{0.15cm}
 
 \textbf{Predictors:}
 \begin{itemize}
-  \item Historical PSI (5 regions, lags 0--5 hours).
+  \item Historical PM$_{2.5}$ readings (5 regions, lags 0--5 hours).
   \item Wind components and mean wind speed.
   \item Sumatra and Kalimantan fire radiative power (FRP) and hotspot counts.
   \item Smoke transport (southerly wind $\times$ Sumatra FRP).
@@ -115,7 +115,7 @@ Serves as our regularized linear baseline, efficiently managing severe multicoll
 
 \textbf{Variable Importance:}
 Permutation importance (\%IncMSE) identifies the key predictors, grouped into:
-Local PSI lags, other-region PSI lags, wind and fire/smoke transport.
+Local PM$_{2.5}$ lags, other-region PM$_{2.5}$ lags, wind and fire/smoke transport.
 \end{block}
 
 ## Models (cont.)

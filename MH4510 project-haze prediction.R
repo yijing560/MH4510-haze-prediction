@@ -7,7 +7,7 @@ library(Hmisc) # For Lag() function
 # ==============================================================================
 # 1. LOAD RAW DATASETS
 # ==============================================================================
-psi_raw    <- read_csv("Historical1hrPM2.5.csv")
+pm25_raw    <- read_csv("Historical1hrPM2.5.csv")
 wind_dir   <- read_csv("HistoricalWindDirectionacrossSingapore2019.csv")
 wind_spd   <- read_csv("HistoricalWindSpeedacrossSingapore2019.csv")
 fire_raw   <- read_csv("fire_archive_M-C61_825464.csv")
@@ -73,7 +73,7 @@ wind_hourly <- inner_join(clean_dir, clean_spd, by = "Timestamp") %>%
 
 # 4. CLEAN AIR QUALITY DATA & BUILD THE MASTER TABLE
 # ==============================================================================
-master_haze_2019 <- psi_raw %>%
+master_haze_2019 <- pm25_raw %>%
   rename(datetime_str = 1) %>%
   mutate(
     Timestamp = dmy_hm(datetime_str),
@@ -109,30 +109,30 @@ head(master_haze_2019)
 # A. Convert wide regional data to long format for EDA time-series plotting
 long_data <- master_haze_2019 %>%
   select(Timestamp, north, south, east, west, central) %>%
-  pivot_longer(north:central, names_to = "location", values_to = "PSI_Level")
+  pivot_longer(north:central, names_to = "location", values_to = "PM25")
 
 # Inspect a random sample of the long data
 long_data %>% sample_n(5)
 
-# B. EDA Multi-Series Line Plot (Regional PSI trends over time)
-eda_plot <- ggplot(data = long_data, aes(x = Timestamp, y = PSI_Level, group = location, colour = location)) +
+# B. EDA Multi-Series Line Plot (Regional PM2.5 trends over time)
+eda_plot <- ggplot(data = long_data, aes(x = Timestamp, y = PM25, group = location, colour = location)) +
   geom_line(alpha = 0.8) +
   labs(
-    title = "Exploratory Data Analysis: Regional PM2.5/PSI Trends Across Singapore",
-    subtitle = "Comparing multi-station air quality observations over time",
+    title = "Regional PM2.5 Across Singapore",
+    subtitle = "Hourly concentrations, August-October 2019",
     x = "Timestamp",
-    y = "PSI Level",
+    y = "PM2.5 (ug/m3)",
     colour = "Region"
   ) +
   theme_minimal()
 print(eda_plot)
 ggsave("EDA_plot.png", plot = eda_plot, width = 5, height = 3, dpi = 300)
-# Create a clean summary table for regional PSI levels
+# Create a clean summary table for regional PM2.5 concentrations
 regional_summary <- long_data %>% 
   group_by(location) %>% 
   summarise(
-    Mean_PSI = round(mean(PSI_Level, na.rm = TRUE), 1),
-    Max_PSI = max(PSI_Level, na.rm = TRUE)
+    Mean_PM25 = round(mean(PM25, na.rm = TRUE), 1),
+    Max_PM25 = max(PM25, na.rm = TRUE)
   )
 print(regional_summary)
 
@@ -178,7 +178,7 @@ print(eda_drivers_plot)
 
 split_date <- ymd("2019-10-21")
 
-# A. Original lagged observation function for regional PSI readings
+# A. Original lagged observation function for regional PM2.5 readings
 lagged_obs <- function(df, L) {
   if (L == 0) {
     return(df %>% select(north, south, east, west, central))
@@ -197,7 +197,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   cat(sprintf("========================================\n"))
   
   # Generate 0 to 5 hour regional lags and define target as lead(west, h)
-  PSI_with_lags <- c(0, 1:5) %>%
+  PM25_with_lags <- c(0, 1:5) %>%
     map_dfc(function(L) lagged_obs(master_haze_2019, L)) %>%
     mutate(
       Timestamp = master_haze_2019$Timestamp,
@@ -209,11 +209,11 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   # B. Chronological Time-Based Train-Test Split
   # Training window: August 1 to October 20
   # Testing window: October 21 to October 31
-  train_data <- PSI_with_lags %>%  
+  train_data <- PM25_with_lags %>%
     filter(Timestamp < split_date) %>%  
     select(-Timestamp) # Remove timestamp column before modeling matrix
   
-  test_data <- PSI_with_lags %>%  
+  test_data <- PM25_with_lags %>%
     filter(Timestamp >= split_date) %>%  
     select(-Timestamp)
   
@@ -523,7 +523,7 @@ importance_plot <- phase3_imp %>%
   scale_y_discrete(labels = function(x) sub("___.*$", "", x)) +
   facet_wrap(~ horizon, scales = "free_y") +
   labs(
-    title = "Random Forest Permutation Variable Importance (West PSI)",
+    title = "Random Forest Permutation Variable Importance (West PM2.5)",
     x = "% Increase in MSE when permuted",
     y = NULL
   ) +
@@ -588,10 +588,10 @@ forecast_plot <- ggplot(phase3_forecast_df, aes(x = Timestamp)) +
   geom_line(aes(y = rf, colour = "Random Forest"), alpha = 0.7) +
   facet_wrap(~ horizon, ncol = 1) +
   labs(
-    title = "Random Forest Forecasts vs Actual West PSI",
+    title = "Random Forest Forecasts vs Actual West PM2.5",
     subtitle = "Testing target period: 21-31 October 2019",
     x = "Target timestamp",
-    y = "PSI Level",
+    y = "PM2.5 (ug/m3)",
     colour = NULL
   ) +
   theme_minimal()
@@ -1077,6 +1077,78 @@ sar_spatial_plot <- ggplot(phase5_spatial, aes(x = Horizon, y = rho)) +
 print(sar_spatial_plot)
 ggsave("SAR_Spatial_Coefficient.png", sar_spatial_plot, width = 8, height = 4.5, dpi = 300)
 
+# SAR THEORY CHECKS: prediction sensitivity and recovery of known parameters.
+# These explain the fitted model; they do not change training or tune W.
+sar_sensitivity <- map_dfr(seq_along(phase5_fit), function(i) {
+  fit <- phase5_fit[[i]]
+  origin <- min(fit$forecasts$Timestamp)
+  baseline <- fit$forecasts %>% filter(Timestamp == origin) %>% arrange(region)
+  changed <- baseline %>% mutate(pm25 = pm25 + if_else(region == "west", 10, 0))
+  before <- predict_pooled_sar(fit$sar_model, baseline)
+  after <- predict_pooled_sar(fit$sar_model, changed)
+  delta <- after$prediction - before$prediction
+  # An independent calculation checks the spatial-multiplier interpretation.
+  input_change <- 10 * fit$sar_model$coefficients["pm25"] * as.numeric(regions == "west")
+  stopifnot(max(abs(delta - as.vector(solve(diag(5) - fit$rho * W, input_change)))) < 1e-8)
+  tibble(Horizon = names(phase5_fit)[i], region = factor(regions, levels = regions),
+         change = delta, type = if_else(regions == "west", "West (direct)", "Other regions"),
+         regression_only = as.numeric(input_change))
+})
+sar_sensitivity_summary <- sar_sensitivity %>% group_by(Horizon) %>%
+  summarise(West_change = change[region == "west"],
+            West_without_feedback = regression_only[region == "west"],
+            Largest_other_change = max(change[region != "west"]), .groups = "drop")
+sar_sensitivity_plot <- ggplot(sar_sensitivity, aes(region, change, fill = type)) +
+  geom_col(width = 0.65) + geom_text(aes(label = sprintf("%.2f", change)), vjust = -0.4, size = 3) +
+  facet_wrap(~ Horizon) +
+  scale_fill_manual(values = c("West (direct)" = "#0072B2", "Other regions" = "#999999")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  scale_x_discrete(labels = tools::toTitleCase) +
+  labs(title = "Forecast Change After Increasing Current West PM2.5 by 10",
+       x = NULL, y = "Change in predicted PM2.5 (ug/m3)", fill = NULL) +
+  theme_minimal(base_size = 11) + theme(legend.position = "bottom")
+ggsave("SAR_Prediction_Changes.png", sar_sensitivity_plot, width = 8, height = 3.2,
+       dpi = 300, device = grDevices::png, type = "cairo")
+
+# Conditional simulation: independent Gaussian errors and known fixed W.
+# This checks estimation, not forecasting performance on real haze data.
+set.seed(2026)
+sar_simulation_runs <- 100L
+sar_simulation_times <- 200L
+sar_simulation <- map_dfr(seq_len(sar_simulation_runs), function(replication) {
+  times <- as.POSIXct("2019-08-01", tz = "UTC") + 3600 * seq_len(sar_simulation_times)
+  inputs <- tibble(Timestamp = times, wind_u = rnorm(length(times)),
+                   wind_w = rnorm(length(times)), fire_frp = rexp(length(times)))
+  d <- map_dfr(regions, function(r) mutate(inputs, region = r)) %>%
+    mutate(region = factor(region, levels = regions), pm25 = runif(n(), 5, 30),
+           target = 0, target_time = Timestamp + hours(1))
+  X <- model.matrix(formula_sp, data = d)
+  beta <- setNames(c(2, 0.7, 0.2, -0.3, 0.1, 0.5, -0.4, 0.3, 0.1), colnames(X))
+  rhs <- matrix(as.vector(X %*% beta) + rnorm(nrow(d)), nrow = 5, byrow = TRUE)
+  d$target <- as.vector(t(solve(diag(5) - 0.4 * W, rhs)))
+  estimated <- fit_pooled_sar(d, W)
+  tibble(Replication = replication, rho = estimated$arcoef,
+         pm25_coefficient = unname(estimated$coefficients["pm25"]))
+})
+sar_simulation_summary <- bind_rows(
+  transmute(sar_simulation, Parameter = "rho", Estimate = rho),
+  transmute(sar_simulation, Parameter = "pm25_coefficient", Estimate = pm25_coefficient)
+) %>%
+  mutate(True = if_else(Parameter == "rho", 0.4, 0.7)) %>%
+  group_by(Parameter, True) %>%
+  summarise(Mean_estimate = mean(Estimate),
+            Estimation_RMSE = sqrt(mean((Estimate - True)^2)), .groups = "drop")
+stopifnot(all(is.finite(sar_simulation$rho)),
+          max(abs(sar_simulation_summary$Mean_estimate - sar_simulation_summary$True)) < 0.05)
+print(sar_sensitivity_summary)
+print(sar_simulation_summary)
+write_csv(sar_sensitivity, "SAR_Prediction_Changes.csv")
+write_csv(sar_simulation, "SAR_Simulation_Runs.csv")
+write_csv(sar_simulation_summary, "SAR_Simulation_Summary.csv")
+saveRDS(list(sensitivity = sar_sensitivity, sensitivity_summary = sar_sensitivity_summary,
+             simulation = sar_simulation, simulation_summary = sar_simulation_summary),
+        "SAR_Theory_Checks.rds")
+
 write_csv(phase5_results, "SAR_Test_Metrics_West.csv")
 write_csv(phase5_pooled_results, "SAR_Test_Metrics_All_Regions.csv")
 write_csv(phase5_spatial, "SAR_Spatial_Coefficients.csv")
@@ -1089,7 +1161,8 @@ saveRDS(mget(c("long_data","regional_summary", "driver_summary", "model_t1", "mo
                "phase3_results", "phase3_group", "phase3_oob", "phase3_fit",
                "svm_results", "svm_selection", "svm_kernel_summary", "svm_forecasts",
                "phase4_results", "phase5_results", "phase5_pooled_results",
-               "phase5_spatial", "phase5_forecasts")),
+               "phase5_spatial", "phase5_forecasts", "sar_sensitivity",
+               "sar_sensitivity_summary", "sar_simulation_summary")),
         "Report_Analysis_Outputs.rds")
 # ==============================================================================
 # CONFORMAL COVERAGE
