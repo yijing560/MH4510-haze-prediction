@@ -916,7 +916,7 @@ saveRDS(list(results = svm_results, selection = svm_selection, tuning = svm_tuni
 ```
 
 ## VARX Spatio-Temporal Model
-### Model Formulation
+### Model Formulation & Estimation
 To model Singapore's five regional air quality series simultaneously rather than in isolation, we implement a Vector Autoregressive Exogenous ($\text{VARX}(p)$) system to capture inter-regional temporal dependencies across the island alongside external wind and fire conditions:
 
 $$Y_t = c + \sum_{i=1}^{p} A_i Y_{t-i} + B X_t + \varepsilon_t$$
@@ -925,20 +925,21 @@ where:
 
 * $Y_t = [\text{North}_t, \text{South}_t, \text{East}_t, \text{West}_t, \text{Central}_t]^\top \in \mathbb{R}^5$ is the endogenous vector of hourly regional $\text{PM}_{2.5}$ concentrations.
 * $X_t = [\text{wind\_u}_t, \text{wind\_w}_t, \text{daily\_frp\_Sumatra}_t, \text{smoke\_transport\_Sumatra}_t]^\top \in \mathbb{R}^4$ is the exogenous vector capturing East-West and North-South wind velocity components, daily Sumatran Fire Radiative Power (FRP), and wind-driven smoke advection.
-* $c$ is a $5 \times 1$ intercept vector, $A_i$ are $5 \times 5$ endogenous lag coefficient matrices capturing inter-regional diffusion, $B$ is a $5 \times 4$ exogenous impact matrix, and $\varepsilon_t$ is a vector white-noise innovation process.
+* $c$ is a $5 \times 1$ intercept vector, $A_i$ are $5 \times 5$ endogenous lag coefficient matrices capturing inter-regional diffusion, $B$ is a $5 \times 4$ exogenous impact matrix, and $\varepsilon_t \sim \mathcal{N}(0, \Sigma_\varepsilon)$ is a $5 \times 1$ vector white-noise innovation process with covariance matrix $\Sigma_\varepsilon$.
+
+Unlike univariate regressions that ignore cross-regional feedback, each matrix $A_i$ explicitly parameterises how lagged pollution in region $j$ affects region $k$ at time $t$. Since all five regional equations share the same set of lagged endogenous and exogenous regressors, estimating each region's equation via Ordinary Least Squares (OLS) is equivalent to Generalised Least Squares (GLS) and yields consistent, asymptotically efficient estimates of $\hat{c}$, $\hat{A}_1, \dots, \hat{A}_p$, and $\hat{B}$.
 
 ### Stationarity Verification & Lag Order Selection
-Valid VAR estimation requires all endogenous time series to be stationary so that parameter estimates remain consistent over time. Prior to fitting the model on the training set ($n = 1,944$ hourly observations), we apply the Augmented Dickey-Fuller (ADF) test to each regional series in $Y_{\text{train}}$. Next, we determine the optimal autoregressive lag order $p \in \{1, \dots, 10\}$ by minimising the Akaike Information Criterion (AIC), balancing model fit against parameter complexity.
+Valid VAR estimation requires all endogenous series in $Y_t$ to be covariance-stationary so that parameter estimates remain time-invariant and impulse responses decay rather than diverge. Prior to fitting the model on the training set ($n = 1,944$ hourly observations), we apply the Augmented Dickey-Fuller (ADF) test to each regional series in $Y_{\text{train}}$. We then select the optimal lag order $p \in \{1, \dots, 10\}$ by minimising the Akaike Information Criterion, balancing multivariate goodness-of-fit against parameter complexity.
 
 ### Spatial Transmission & Diffusion Indicators
-To test our physical advection hypothesis under the Southwest Monsoon, we conduct two diagnostics on the fitted $\text{VARX}(p)$ system:
+To test our physical advection hypothesis under the Southwest Monsoon, we conduct two structural diagnostics on the fitted $\text{VARX}(p)$ system:
 
-1. Granger Causality Tests: We evaluate whether past $\text{PM}_{2.5}$ values in an upwind source region (specifically South and West) provide statistically significant predictive information for future $\text{PM}_{2.5}$ levels across the remaining regions beyond their own historical lags.
-2. Impulse Response Functions (IRFs): Over a 24-hour window, we simulate a sudden $\text{PM}_{2.5}$ spike entering the South and West zones individually to trace how strongly and how quickly the smoke diffuses across the rest of the island.
+1. Granger Causality Tests: Using a joint Wald $F$-test, we test the null hypothesis that all lag coefficients from an upwind source region $j$ to the remaining regions $k \neq j$ are jointly zero ($A_{1,kj} = \dots = A_{p,kj} = 0$). Rejecting this null confirms that upwind $\text{PM}_{2.5}$ readings improve predictions of downwind pollution beyond the downwind zones' own autoregressive history.
+2. Orthogonalised Impulse Response Functions (IRFs): As contemporaneous innovations $\varepsilon_t$ are correlated across Singapore's closely spaced monitoring zones, simulating a shock to one element of $\varepsilon_t$ in isolation would be physically unrealistic. Hence, we apply a Cholesky decomposition ($\Sigma_\varepsilon = P P^\top$) to orthogonalise the innovations into independent structural shocks $u_t = P^{-1}\varepsilon_t$. Rewriting the system in its moving-average representation traces how a smoke shock entering South or West propagates across all five regions over a 24-hour window (with 95% bootstrapped confidence intervals).
 
 ### Out-of-Sample Forecast Evaluation
-To ensure a direct and leak-free comparison against the other models in this study, we evaluate the fitted $\text{VARX}(p)$ system chronologically on the untouched holdout test window. At each forecast origin $t$, we recursively generate multi-step predictions for both short-term ($t+1\text{ hr}$) and medium-term ($t+6\text{ hr}$) horizons using the estimated coefficient matrices $\hat{A}_1, \dots, \hat{A}_p$ and $\hat{B}$. Forecast accuracy on the West region is quantified using Mean Absolute Error ($\text{MAE}$).
-
+To ensure a direct, leak-free comparison with the other models in this study, we evaluate the fitted $\text{VARX}(p)$ system chronologically on the untouched holdout test window. At each forecast origin $t$, we recursively generate multi-step predictions for both short-term ($t+1\text{ hr}$) and medium-term ($t+6\text{ hr}$) horizons using the estimated coefficient matrices $\hat{A}_1, \dots, \hat{A}_p$ and $\hat{B}$.
 
 ```{r varx-training, include=FALSE}
 # PHASE 4 -  VECTOR AUTOREGRESSIVE EXOGENOUS (VARX) SYSTEM ----
