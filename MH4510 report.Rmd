@@ -2,19 +2,21 @@
 title: "MH4510 Group Project: Report"
 subtitle: "Haze Prediction"
 author: |
-  Leong Yi Jing \hfill U2330421C \
   Charlene Tooh Xin Yi \hfill U2340423L \
   Dao Le Bao Ngoc \hfill N2601865G \
   Goh Zhe Qi Amanda \hfill U2340128H \
-  Ng Li Xin \hfill U \
+  Leong Yi Jing \hfill U2330421C \
+  Ng Li Xin \hfill \
 abstract: |
-  Transboundary haze from Indonesian peatland fires poses severe public health and environmental risks to Singapore, creating an operational need for early air quality forecasting ahead of smoke arrival. This study evaluates five statistical and machine learning frameworks (Elastic Net, Random Forest, Support Vector Regression (SVM), Vector Autoregressive Exogenous (VARX), and Spatial Autoregressive (SAR) models) to predict regional PM2.5 concentrations in West Singapore at immediate (t+1hr) and extended (t+6hr) horizons during the August–October 2019 haze episode. Hourly regional air quality readings are integrated with Cartesian wind velocity vectors and NASA satellite fire metrics from Sumatra. Models are evaluated using Mean Absolute Error (MAE) over a chronological holdout window (21–31 October 2019). Results show that spatial and regularised linear models outperform non-linear tree ensembles. SAR and VARX(3) models achieved the lowest errors at t+1hr by capturing cross-regional diffusion, while linear SVM and VARX(3) models led at t+6hr. Spatial and causal diagnostics further confirm strong inter-regional dependence, with smoke surges entering from southern and western zones propagating across Singapore within 2 to 4 hours. 
-output: 
+  Transboundary haze from Indonesian peatland fires poses severe public health and environmental risks to Singapore, creating an operational need for early air quality forecasting ahead of smoke arrival. In this study, we tested five statistical and machine learning, including Elastic Net, Random Forest, Support Vector Regression (SVM), Vector Autoregressive Exogenous (VARX) and Spatial Autoregressive (SAR). They are used to predict regional PM2.5 concentrations in West Singapore one hour ahead (t+1hr) and six hours ahead (t+6hr) during the August–October 2019 haze episode. Hourly regional air quality readings are integrated with Cartesian wind velocity vectors and NASA satellite fire metrics from Sumatra. Models are evaluated using Mean Absolute Error (MAE) over a chronological holdout window (21–31 October 2019). Results show that spatial and regularised linear models outperform non-linear tree ensembles. SAR and VARX(3) models achieved the lowest errors at t+1hr by capturing cross-regional diffusion, while linear SVM and VARX(3) models led at t+6hr. Spatial and causal diagnostics further confirm strong inter-regional dependence, with smoke surges entering from southern and western zones propagating across Singapore within 2 to 4 hours. 
+fontsize: 10pt
+geometry: margin=0.70in
+output:
   pdf_document:
-    toc: true
-    toc_depth: 3
+    toc: false
     number_sections: true
     latex_engine: xelatex
+    fig_caption: true
     extra_dependencies: ["float", "booktabs"]
 ---
 ```{r setup, include=FALSE}
@@ -25,10 +27,10 @@ knitr::opts_chunk$set(
   cache = FALSE,
   error = FALSE,
   fig.align = "center",
-  fig.pos = "H",
-  out.width = "70%",
-  fig.width = 6.5,
-  fig.height = 3.8
+  fig.pos = "htbp",
+  out.width = "65%",
+  fig.width = 5.3,
+  fig.height = 2.8
 )
 
 # The Rmd contains the complete analysis. Knit from a clean R session;
@@ -66,7 +68,9 @@ if (!all(file.exists(input_files))) {
 ```
 
 # Introduction
-Thousands of blazes that have erupted in 2019 can be acrued to human activity, whether intentionally or accidental. A common reason is to clear land. Using fire is an inexpensive and fast way to prepare the ground for agriculture and plantations. The fires are also used to dispose of waste, especially in places with non-existent rubbish collection. Many fire hot spots also overlap with peatlands which are naturally wet ecosystems that become highly flammable when drained for plantation. With an exceptionally powerful El Nino this year, the fires can grow out of control rapidly, especially during prolonged dry spells. This has resulted in hazardous smoke spreading across Singapore. The smoke was then carried northwards by winds from the south, affecting neighbouring countries including Singapore. Transboundary haze pose significant environmental and public health threats to the region. With the haze-belching fires in  Sumatra driving Pollutant Standards Index (PSI) levels up, monitoring and predicting the magnitude of pollutants in the air across Singapore is critical for public health advisories (Rayda, 2026) (Mungcal et al., 2026). When PSI levels surge past unhealthy standards, citizens have to change their way of life: outdoor school activities and sports are suspended, public events are restricted and and are advised to stay indoors. 
+Transboundary haze from forest and peatland fires in Sumatra is a problem for Singapore, especially when weather gets dry. In September 2019, winds from the south carried smoke from Sumatra to Singapore. This led to a decline in air quality (Meteorological Service Singapore, 2020). High levels of pollution can affect health and life. Outdoor work, school activities and public events can all be affected.
+
+As the haze conditions can change rapidly, relying on pollution readings may not give enough time for early preparation. This study therefore looks at historical regional air-quality measurements, meteorological conditions and satellite-detected fire activity in Sumatra can be used to forecast short-term PM$_{2.5}$ concentrations in Singapore, potentially supporting earlier public-health preparedness.
 
 ## Literature Review 
 Traditional air quality forecasting approaches such as Multiple Linear Regression mainly rely on linear assumptions and have long served as standard baseline for air quality (Abdullah et al., 2020). Conversely, Machine Learning techniques account for non-linear relationships and time-lagged variables. Machine Leaning modeling frameworks such as Random Forest (RF), Artificial Neural Network (ANN) and Long Short-Term Memory (LSTM) have started to emerge as a way to effectively predict air quality (Palanichamy et al., 2022). Futhermore, Spatial Autoregressive model such as Vector Autoregressive Exogenous systems and Spatial Autoregressive models can be used to model how pollutants diffuse across interconnected geographic locations. Thus, this project investigates several machine learning algorithms for forecasting haze levels in Singapore, ultimately providing relevant information to responsible parties which allows them to mitigate and plan precautionary measures. 
@@ -74,7 +78,7 @@ Traditional air quality forecasting approaches such as Multiple Linear Regressio
 ## Problem Statement 
 The problem statement centers on the operational challenge faced by public health authorities, which is mitigating the reporting latency between smoke generated by Indonesia and public health advisories in Singapore. Without predictive tools, authorities risk reacting only after the haze has covered Singapore. Thus, this project aims to accurately forecast regional air quality pollution levels across Singapore before the haze covers the island, by leveraging on temporal dependencies and cross-station spatial patterns. By providing the framework, it would help provide crucial preparation time to issue public health advisories, distribute masks, which ultimately mitigates acute respiratory and cardiovascular health risks. 
 
-We use future West-region PM$_{2.5}$ concentration as the main response variable to provide a consistent forecasting target across all models. West is a relevant case study given its location on Singapore's western side and our focus on haze associated with Sumatra. Readings from the other four regions are used as predictors. VARX and SAR model all five regions jointly, but their West-region forecasts are used for the main comparison. This choice does not assume that West is always the first or most polluted region.
+Our primary objective is to predict the West region's hourly PM$_2.5$ concentration at $t+1$ and $t+6$ hours from information observable by forecast origin $t$. West is a relevant case study given its location on Singapore's western side and our focus on haze associated with Sumatra. Readings from the other four regions are used as predictors. VARX and SAR model all five regions jointly, but their West-region forecasts are used for the main comparison. This choice does not assume that West is always the first or most polluted region.
 
 The response is hourly PM$_{2.5}$ concentration, measured in $\mu\mathrm{g/m}^3$, rather than the Pollutant Standards Index (PSI). NEA reports one-hour PM$_{2.5}$ separately from the 24-hour PSI, which is an index based on several pollutants (National Environment Agency, n.d.). Our forecasts therefore concern short-term particulate concentrations, not the official PSI.
 
@@ -299,10 +303,9 @@ knitr::kable(
 )
 ```
 
-
 The multi-series plot shows how PM$_{2.5}$ concentrations change over time. Figure 1 shows the largest shared rise in mid-September, with smaller fluctuations in October. Similar timing across regions suggests common pollution influences.
 
-```{r eda-plot, echo=FALSE, out.width="85%", fig.align='center', fig.cap="Regional PM2.5 Concentrations Across Singapore During the 2019 Peak Haze Window", fig.pos='H'}
+```{r eda-plot, echo=FALSE, out.width="40%", fig.align="center", fig.cap="Regional $\\text{PM}_{2.5}$ concentrations across Singapore, August–October 2019.", fig.pos="htbp"}
 # Generated by the hidden eda-analysis chunk above.
 knitr::include_graphics("EDA_plot.png")
 ```
@@ -322,10 +325,9 @@ knitr::kable(
 
 Figure 2 compares West-region levels against northward wind and `smoke_transport_Sumatra`. Major haze spikes in mid-September align directly with surges in `smoke_transport_Sumatra` under sustained northward winds, while intermittent wind reversals in late September coincide with lower pollution, justifying wind vectors and fire-transport features in our models.
 
-```{r eda-drivers-plot, echo=FALSE, message=FALSE, warning=FALSE, fig.width=6.8, fig.height=4.2, out.width="75%", fig.align='center', fig.cap="West-Region Haze Alongside Northward Wind and Sumatra Smoke Transport", fig.pos='H'}
+```{r eda-drivers-plot, echo=FALSE, fig.width=5.5, fig.height=3.0, out.width="40%", fig.align="center", fig.cap="West $\\text{PM}_{2.5}$, northward wind and Sumatran smoke transport.", fig.pos="htbp"}
 print(eda_drivers_plot)
 ```
-
 
 # Methodologies 
 ## Elastic Net Regression (Baseline Regularized Model)
@@ -472,7 +474,7 @@ print(elastic_net_results)
 ```
 
 ## Random Forest
-Linear models such as the elastic net cannot capture threshold effects, for example wind speed needing to exceed a critical value before smoke plumes reach Singapore. To account for such non-linear atmospheric interactions, we train a Random Forest (Breiman, 2001) of 500 trees to forecast the PM2.5 level in the west region at two horizons: $t+1$ hour (immediate) and $t+6$ hours (extended). Predictors at time $t$ comprise the PM2.5 of all five regions at lags 0 to 5 hours, wind vector components ($u$, $w$) and mean wind speed, and daily fire radiative power and hotspot counts for Sumatra, together with the Sumatra smoke-transport interaction term. Only Sumatra-based fire radiative power, hotspot counts, and smoke-transport features are included. The number of variables tried at each split (`mtry`) is selected by minimising the out-of-bag (OOB) mean squared error. Variable importance is measured by permutation: the percentage increase in OOB MSE when a predictor's values are randomly shuffled. Predictors are grouped into local (west) lags, other-region lags, wind, and Sumatra fire/smoke transport to assess whether local persistence or upstream inputs become more important as the horizon lengthens. Forecasts are compared using MAE.
+A 500-tree Random Forest captures interactions and non-linear threshold that a simple linear regression might overlook (Breiman, 2001). The predictors include every lag, all wind variables and the **previous day** Sumatran fire/transport proxies. `mtry` is chosen from a predefined grid by out-of-bag (OOB) mean squared error (MSE) on the training data; the test set is used for final MAE. The OOB selection is not a chronological assessment and may favor temporally correlated features, therefore we treat the importance scores as model diagnostics rather than casual estimates.
 
 ```{r random-forest-training, include=FALSE}
 # PHASE 3: Random Forest
@@ -772,11 +774,7 @@ ggsave("forecast_plot.png", forecast_plot, width = 7, height = 5, dpi = 300)
 ```
 
 ## Support Vector Machine (SVM)
-Following the kernel-comparison and tuning approach in Lab 6, we implement Support Vector Regression (SVR) using `caret` and `kernlab`. Unlike the lab's categorical response, the outcome is continuous West-region PM$_{2.5}$ at $t+1$ or $t+6$ hours. SVR fits a function that balances model complexity against deviations outside an epsilon-insensitive error band. Linear, polynomial and radial basis kernels allow us to compare a linear relationship with nonlinear alternatives.
-
-The predictor set matches Phase 3: readings from all five regions at lags 0--5 hours, wind components and mean speed, Sumatra fire power and hotspot counts, and the smoke-transport interaction (36 inputs before removal of constant columns). Constant predictors are removed and the remaining inputs centred and scaled within each training fold.
-
-We tune six linear configurations ($C=2^{-4},\ldots,2^1$), eight polynomial configurations ($C\in\{0.5,2\}$, scale $\in\{1/64,1/16\}$, degree $\in\{2,3\}$), and six radial configurations ($C\in\{0.5,2\}$, $\sigma\in\{1/16,1/8,1/4\}$). Three expanding chronological training windows precede seven-day validation blocks starting on 23 September, 1 October and 9 October. Training targets must precede each block's first forecast origin. The kernel and parameters with the lowest mean validation MAE are selected separately by horizon, refitted on all training data, and evaluated once on the untouched test set using MAE, RMSE and predictive $R^2$.
+Support vector regression minimises model complexity subject to an $\varepsilon$-insensitive loss, allowing linear and kernel-based functional relationships. The data used for both SVM and Random Forest are the same. We test and compare linear, polynomial and radial kernels. All scaling is fitted within the training folds. The kernel and parameters with the lowest mean validation MAE are selected separately by horizon, refitted on all training data, and evaluated once on the untouched test set using MAE, RMSE and predictive $R^2$.
 
 ```{r svm-training, include=FALSE}
 # SUPPORT VECTOR REGRESSION (SVM): adapted from mh4510_lab_06_svm.Rmd
@@ -1339,7 +1337,7 @@ sar_sensitivity_plot <- ggplot(sar_sensitivity, aes(region, change, fill = type)
        x = NULL, y = "Change in predicted PM2.5 (ug/m3)", fill = NULL) +
   theme_minimal(base_size = 11) + theme(legend.position = "bottom")
 ggsave("SAR_Prediction_Changes.png", sar_sensitivity_plot, width = 8, height = 3.2,
-       dpi = 300, device = grDevices::png, type = "cairo")
+       dpi = 300)
 
 # Conditional simulation: independent Gaussian errors and known fixed W.
 # This checks estimation, not forecasting performance on real haze data.
@@ -1398,367 +1396,6 @@ saveRDS(mget(c("long_data","regional_summary", "driver_summary", "model_t1", "mo
 # ==============================================================================
 ```
 
-## Conformal Coverage
-Point forecasts provide an expected pollution concentration, but planning outdoor activities also requires understanding how far actual concentrations might depart from that forecast. We therefore used split conformal prediction to quantify uncertainty in one-hour-ahead West-region PM$_{2.5}$ forecasts.
-
-A separate Elastic Net model used the preceding five hourly pollution readings from each of Singapore's five regions. These 25 lagged features represent recent local conditions and cross-regional persistence. Three additional features used the preceding hour's wind speed and directional components. Complete same-day fire totals were excluded because they can contain detections recorded after the forecast origin.
-
-We fitted the model on 1 August–10 October 2019, selected its tuning parameters using expanding-window validation, and reserved 11–20 October for calibration. The final test period was 21–31 October. This calibration experiment therefore used a shorter fitting window than the main model comparison.
-
-For each calibration observation, we calculated the absolute prediction error:
-
-$$s_i = |y_i-\hat{y}_i|.$$
-
-With 240 calibration observations and a nominal coverage target of 95%, we selected the 229th smallest error, using the finite-sample rank $\lceil(240+1)\times0.95\rceil$. This defined the fixed half-width $q$ of each prediction interval:
-
-$$[\hat{y}_t-q,\;\hat{y}_t+q].$$
-
-We evaluated both observed coverage and interval width on the test period. The standard conformal coverage guarantee assumes exchangeability. Since hourly pollution observations can be serially dependent, we interpret our findings as empirical coverage for this particular holdout.
-
-```{r conformal-analysis, include=FALSE}
-# CONFORMAL COVERAGE
-# One-hour-ahead West-region PM2.5 prediction intervals
-# ==============================================================================
-
-run_conformal_coverage <- function(haze) {
-
-  # 1. Check and align the hourly data
-  regions <- c("north", "south", "east", "west", "central")
-  wind <- c("wind_u", "wind_w", "mean_wind_spd")
-  required <- c("Timestamp", regions, wind)
-
-  if (!all(required %in% names(haze))) {
-    stop(
-      "Missing columns: ",
-      paste(setdiff(required, names(haze)), collapse = ", ")
-    )
-  }
-
-  timestamp <- as.POSIXct(
-    haze$Timestamp,
-    tz = "UTC",
-    origin = "1970-01-01"
-  )
-
-  if (anyDuplicated(timestamp[!is.na(timestamp)])) {
-    stop("Expected at most one row per hour.")
-  }
-
-  # Match the timestamp convention used by the group's preprocessing.
-  # A complete hourly grid preserves lag alignment if observations are missing.
-  hours <- seq(
-    as.POSIXct("2019-08-01 00:00:00", tz = "UTC"),
-    as.POSIXct("2019-10-31 23:00:00", tz = "UTC"),
-    by = "hour"
-  )
-
-  rows <- match(hours, timestamp)
-
-  observations <- as.matrix(
-    as.data.frame(haze)[rows, c(regions, wind)]
-  )
-
-  storage.mode(observations) <- "double"
-
-  # 2. Construct predictors available before each target hour
-  lag_hours <- function(x, n) {
-    lagged <- rbind(
-      matrix(NA_real_, n, ncol(x)),
-      head(x, -n)
-    )
-
-    colnames(lagged) <- paste0(colnames(x), "_lag", n)
-    lagged
-  }
-
-  region_lags <- lapply(
-    1:5,
-    function(n) lag_hours(observations[, regions], n)
-  )
-
-  wind_lags <- lag_hours(observations[, wind], 1)
-
-  # Complete same-day fire totals may contain detections after forecast issuance.
-  x <- do.call(cbind, c(region_lags, list(wind_lags)))
-  y <- observations[, "west"]
-
-  usable <- is.finite(y) & rowSums(!is.finite(x)) == 0L
-
-  # 3. Separate fitting, calibration and test periods by target timestamp
-  fit <- which(
-    usable &
-      hours < as.POSIXct("2019-10-11", tz = "UTC")
-  )
-
-  calibration <- which(
-    usable &
-      hours >= as.POSIXct("2019-10-11", tz = "UTC") &
-      hours < as.POSIXct("2019-10-21", tz = "UTC")
-  )
-
-  test <- which(
-    usable &
-      hours >= as.POSIXct("2019-10-21", tz = "UTC")
-  )
-
-  if (
-    length(fit) < 100L ||
-    length(calibration) < 19L ||
-    length(test) < 2L
-  ) {
-    stop("Too few usable hours in a fitting, calibration or test period.")
-  }
-
-  # 4. Fit Elastic Net using base R
-  # Objective:
-  # RSS / (2 * n) + penalty *
-  # (mix * sum(abs(beta)) + (1 - mix) * sum(beta^2) / 2)
-  fit_model <- function(indices, mix, penalty) {
-
-    design <- x[indices, , drop = FALSE]
-    n <- nrow(design)
-
-    # Estimate scaling parameters using only this fitting window.
-    center <- colMeans(design)
-    z <- sweep(design, 2L, center, "-")
-
-    scale <- sqrt(colMeans(z^2))
-    scale[scale == 0] <- 1
-
-    z <- sweep(z, 2L, scale, "/")
-
-    intercept <- mean(y[indices])
-    gram <- crossprod(z) / n
-
-    correlation <- drop(
-      crossprod(z, y[indices] - intercept)
-    ) / n
-
-    if (mix == 0) {
-
-      beta <- drop(
-        solve(
-          gram + diag(penalty, ncol(z)),
-          correlation
-        )
-      )
-
-    } else {
-
-      beta <- numeric(ncol(z))
-      curvature <- diag(gram) + penalty * (1 - mix)
-
-      for (iteration in seq_len(50000L)) {
-
-        previous <- beta
-
-        for (j in seq_along(beta)) {
-
-          if (curvature[j] == 0) {
-            next
-          }
-
-          partial <- correlation[j] -
-            sum(gram[j, ] * beta) +
-            gram[j, j] * beta[j]
-
-          beta[j] <- sign(partial) *
-            max(abs(partial) - penalty * mix, 0) /
-            curvature[j]
-        }
-
-        change <- max(abs(beta - previous))
-        tolerance <- 1e-9 * max(1, abs(beta))
-
-        if (change <= tolerance) {
-          break
-        }
-      }
-
-      if (iteration == 50000L) {
-        stop("Elastic Net did not converge.")
-      }
-    }
-
-    list(
-      center = center,
-      scale = scale,
-      intercept = intercept,
-      beta = setNames(beta, colnames(x))
-    )
-  }
-
-  predict_rows <- function(model, indices) {
-
-    z <- sweep(
-      x[indices, , drop = FALSE],
-      2L,
-      model$center,
-      "-"
-    )
-
-    z <- sweep(z, 2L, model$scale, "/")
-
-    model$intercept + drop(z %*% model$beta)
-  }
-
-  # 5. Tune using expanding fitting windows and 24-hour validation blocks
-  fold_starts <- seq.int(
-    floor(0.7 * length(fit)),
-    length(fit) - 24L,
-    by = 24L
-  )
-
-  grid <- expand.grid(
-    penalty = 10^seq(-2, 2, length.out = 5L),
-    mix = seq(0, 1, length.out = 5L)
-  )
-
-  validation_rmse <- function(mix, penalty) {
-
-    scores <- vapply(
-      fold_starts,
-      function(start) {
-
-        model <- fit_model(
-          fit[seq_len(start)],
-          mix,
-          penalty
-        )
-
-        validate <- fit[start + seq_len(24L)]
-
-        errors <- y[validate] -
-          predict_rows(model, validate)
-
-        sqrt(mean(errors^2))
-      },
-      numeric(1L)
-    )
-
-    mean(scores)
-  }
-
-  scores <- mapply(
-    validation_rmse,
-    grid$mix,
-    grid$penalty
-  )
-
-  best <- grid[which.min(scores), ]
-
-  model <- fit_model(
-    fit,
-    best$mix,
-    best$penalty
-  )
-
-  # 6. Calibrate a nominal 95% prediction interval
-  calibration_predictions <- predict_rows(
-    model,
-    calibration
-  )
-
-  residuals <- sort(
-    abs(y[calibration] - calibration_predictions)
-  )
-
-  rank <- ceiling(
-    0.95 * (length(residuals) + 1L)
-  )
-
-  half_width <- residuals[rank]
-
-  # 7. Evaluate the fixed interval on the untouched holdout
-  forecast <- predict_rows(model, test)
-  observed <- y[test]
-  error <- observed - forecast
-
-  lower <- forecast - half_width
-  upper <- forecast + half_width
-  covered <- abs(error) <= half_width
-
-  metrics <- data.frame(
-    fit_n = length(fit),
-    calibration_n = length(calibration),
-    test_n = length(test),
-    mixing_parameter = best$mix,
-    penalty = best$penalty,
-    nominal_coverage_pct = 95,
-    covered_n = sum(covered),
-    observed_coverage_pct = 100 * mean(covered),
-    interval_half_width = half_width,
-    interval_width = 2 * half_width,
-    RMSE = sqrt(mean(error^2)),
-    MAE = mean(abs(error)),
-    R2 = 1 - sum(error^2) /
-      sum((observed - mean(observed))^2)
-  )
-
-  forecasts <- data.frame(
-    timestamp = hours[test],
-    observed_pm25_ug_m3 = observed,
-    forecast_pm25_ug_m3 = forecast,
-    lower_95_ug_m3 = lower,
-    upper_95_ug_m3 = upper,
-    covered = covered
-  )
-
-  # 8. Evaluate the project's proposed alert threshold
-  threshold <- 55
-
-  alert_metrics <- function(prediction) {
-
-    missed <- sum(
-      observed > threshold &
-        prediction <= threshold
-    )
-
-    false_alarms <- sum(
-      observed <= threshold &
-        prediction > threshold
-    )
-
-    c(
-      missed = missed,
-      false_alarms = false_alarms,
-      cost = 5 * missed + false_alarms
-    )
-  }
-
-  alerts <- rbind(
-    Elastic_Net = alert_metrics(forecast),
-    Persistence = alert_metrics(x[test, "west_lag1"])
-  )
-
-  # 9. Print and return the results
-  print(metrics, row.names = FALSE)
-
-  cat("\nWind coefficients:\n")
-  print(model$beta[colnames(wind_lags)])
-
-  cat(
-    "\nHoldout maximum:", max(observed),
-    "| Hours above 55:", sum(observed > threshold),
-    "\n"
-  )
-
-  print(alerts)
-
-  invisible(
-    list(
-      metrics = metrics,
-      forecasts = forecasts,
-      alerts = alerts,
-      wind_coefficients = model$beta[colnames(wind_lags)]
-    )
-  )
-}
-
-# Run the conformal analysis using the group's cleaned data.
-conformal <- run_conformal_coverage(master_haze_2019)
-```
-
 # Results
 ## Elastic Net
 Through 5-fold cross-validation, the model selected optimal tuning parameters of $\alpha = 0.5$ and $\lambda = 0.1$. This configuration reflects an even mixture of $L_1$ (Lasso) feature selection and $L_2$ (Ridge) coefficient shrinkage. The model achieved an out-of-sample Test MAE of 5.44 while the sparse coefficient matrix reveals that short-term pollutant persistence is heavily affected by immediate temporal proximity. Specifically, 1-hour historical lags have the strongest positive coefficients. Higher-order temporal lags (such as lags 3 to 5) were heavily shrunk or driven entirely to zero, indicating that immediate 1-hour momentum dictates short-horizon air quality states.
@@ -1775,7 +1412,8 @@ coef_df_t1 <- data.frame(
 )
 ```
 
-```{r enet-table-t1, echo=FALSE, results='asis',message=FALSE, warning=FALSE}
+
+```{r enet-table-t1, include=FALSE}
 # This chunk has NO include=FALSE. It only outputs the kable table cleanly.
 knitr::kable(
   coef_df_t1,
@@ -1790,7 +1428,8 @@ cat("\n\\normalsize\n")
 
 ```
 
-```{r enet-path-t1, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.width=6, fig.height=3.5, out.width="65%", fig.cap="Elastic Net Regularization Path and Coefficient Shrinkage across Penalty Parameter Lambda (t+1 Horizon)", fig.pos='H'}
+
+```{r enet-path-t1, include=FALSE}
 # Directly plot the glmnet regularization path from the final model
 plot(model_t1$finalModel, xvar = "lambda", label = FALSE)
 ```
@@ -1807,7 +1446,8 @@ coef_df_t6 <- data.frame(
 )
 ```
 
-```{r enet-table-t6, echo=FALSE, results='asis',message=FALSE, warning=FALSE}
+
+```{r enet-table-t6, include=FALSE}
 # This chunk has NO include=FALSE. It only outputs the kable table cleanly.
 knitr::kable(
   coef_df_t6,
@@ -1821,7 +1461,8 @@ knitr::kable(
 cat("\n\\normalsize\n")
 ```
 
-```{r enet-path-t6, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.width=6, fig.height=3.5, out.width="65%", fig.cap="Elastic Net Regularization Path and Coefficient Shrinkage across Penalty Parameter Lambda (t+6 Horizon)", fig.pos='H'}
+
+```{r enet-path-t6, include=FALSE}
 # Directly plot the glmnet regularization path for t+6
 plot(model_t6$finalModel, xvar = "lambda", label = FALSE)
 ```
@@ -1872,7 +1513,10 @@ knitr::kable(
 
 The table is generated from the Phase 3 model outputs whenever this report is knitted, so its values correspond to the current training and test split rather than values from an earlier run. At $t+1$ hour, **`r phase3_best_t1$Model[[1]]`** has the lowest MAE (`r sprintf("%.2f", phase3_best_t1$MAE[[1]])`). At $t+6$ hours, **`r phase3_best_t6$Model[[1]]`** has the lowest MAE (`r sprintf("%.2f", phase3_best_t6$MAE[[1]])`). The Random Forest's values should be compared with both benchmarks at each horizon; a lower test error indicates better out-of-sample accuracy.
 
-![Random Forest forecasts vs actual west PM2.5 on the test period](forecast_plot.png)
+
+```{r rf-forecast-figure, echo=FALSE, out.width="40%", fig.align="center", fig.pos="htbp", fig.cap="Random Forest forecasts and observed West $\\text{PM}_{2.5}$."}
+knitr::include_graphics("forecast_plot.png")
+```
 
 ### Permutation Variable Importance
 
@@ -1900,17 +1544,11 @@ knitr::kable(
 )
 ```
 
-![Share of permutation importance by predictor group](group_plot.png)
-
 The group-level table and chart are recalculated from the current Random Forest fits. Compare the relative contributions across $t+1$ and $t+6$ hours to see whether recent PM2.5 readings, wind, or Sumatra fire/smoke features gain importance as the forecast horizon lengthens. Importance is a measure of how much the fitted model relies on a predictor; it does not, by itself, establish a causal effect or guarantee better forecasting accuracy.
 
-![Permutation importance of the top 15 predictors](importance_plot.png)
-
-The top-15 chart ranks the predictors actually used by the fitted model at each horizon. The fire-related variables available to this Random Forest are `daily_frp_Sumatra`, `daily_count_Sumatra`, and `smoke_transport_Sumatra`. Any change in the ranking between horizons should therefore be interpreted in terms of the Sumatra fire and smoke-transport variables, wind conditions, and lagged regional PM2.5 readings.
+The fire-related variables available to this Random Forest are `daily_frp_Sumatra`, `daily_count_Sumatra`, and `smoke_transport_Sumatra`. Any change in the ranking between horizons should therefore be interpreted in terms of the Sumatra fire and smoke-transport variables, wind conditions, and lagged regional PM2.5 readings.
 
 Daily Sumatra fire features are constant within a given day. This may limit how well the model generalises to later dates if it learns day-specific patterns rather than a stable relationship between upstream fire activity and Singapore PM2.5. The recalculated test-set metrics should be used to assess whether this limitation is reflected in the model's out-of-sample performance.
-
-\clearpage
 
 ## Support Vector Machine (SVM)
 ### Kernel Selection and Test Accuracy
@@ -1939,7 +1577,7 @@ knitr::kable(
 
 Chronological validation selects a **`r svm_selection$kernel[1]`** kernel at one hour and a **`r svm_selection$kernel[2]`** kernel at six hours. The corresponding held-out MAEs are **`r sprintf("%.2f", svm_report_t1$MAE)`** and **`r sprintf("%.2f", svm_report_t6$MAE)`** $\mu\mathrm{g/m}^3$. Test outcomes are not used to choose either the kernel or its tuning parameters. The reported $R^2$ is $1-\mathrm{SSE}/\mathrm{SST}$, measuring predictive accuracy against the test-set mean rather than squared correlation.
 
-```{r svm-kernel-plot, echo=FALSE, out.width="85%", fig.align='center', fig.cap="Lowest mean chronological-validation MAE for each SVM kernel and forecast horizon.", fig.pos='H'}
+```{r svm-kernel-plot, echo=FALSE, out.width="40%", fig.align='center', fig.cap="Lowest mean chronological-validation MAE for each SVM kernel and forecast horizon.", fig.pos='H'}
 knitr::include_graphics("SVM_Kernel_Validation.png")
 ```
 
@@ -1947,7 +1585,7 @@ The linear kernel gives the lowest mean validation MAE at both horizons. Polynom
 
 ### Forecasts Versus Observations
 
-```{r svm-forecast-plot, echo=FALSE, out.width="95%", fig.align='center', fig.cap="Selected SVM forecasts against West-region observations and the persistence benchmark at both horizons.", fig.pos='H'}
+```{r svm-forecast-plot, echo=FALSE, fig.align="center", fig.show="hold", out.width="40%", fig.cap="Selected SVM forecasts against West-region observations and the persistence benchmark at both horizons.", fig.pos="htbp"}
 knitr::include_graphics("SVM_Forecast_vs_Actual.png")
 ```
 
@@ -1966,7 +1604,8 @@ Both South and West regions yield highly significant Granger causality results (
 ### Impulse Response Function (IRF) Simulations
 The 24-hour IRF simulations illustrate how a sudden smoke spike spreads across the island depending on the point of entry:
 
-```{r varx-irf-plots, echo=FALSE, fig.align="center", fig.show="hold", out.width="49%", fig.cap="24-Hour Orthogonalized Impulse Response Functions for South (left) and West (right) $\\text{PM}_{2.5}$ Shocks", fig.pos='H'}
+
+```{r varx-irf-plots, echo=FALSE, fig.align="center", fig.show="hold", out.width="40%", fig.cap="VARX impulse responses to South and West $\\text{PM}_{2.5}$ shocks.", fig.pos="htbp"}
 knitr::include_graphics(c("VARX_South_IRF.png", "VARX_West_IRF.png"))
 ```
 
@@ -1976,7 +1615,8 @@ knitr::include_graphics(c("VARX_South_IRF.png", "VARX_West_IRF.png"))
 ### Forecast Accuracy at $t+1$ and $t+6$ Hours
 Across the October 21–31 window, the $\text{VARX}(3)$ model achieves an $\text{MAE}$ of $4.45\ \mu\text{g/m}^3$ at the $t+1\text{ hr}$ horizon, which increases to $6.86\ \mu\text{g/m}^3$ at the $t+6\text{ hr}$ horizon.
 
-```{r varx-forecast-plot, echo=FALSE, fig.align="center", out.width="80%", fig.cap="VARX(3) Out-of-Sample $\\text{PM}_{2.5}$ Forecasts vs. Actual Observations for the West Region (October 21-31, 2019)", fig.pos='H'}
+```{r varx-forecast-plot, echo=FALSE, out.width="50%", fig.align="center", fig.cap="VARX(3) Out-of-Sample $\\text{PM}_{2.5}$ Forecasts vs. Actual Observations for the West Region (October 21-31, 2019).", fig.pos="htbp"}
+
 knitr::include_graphics("VARX_Actual_Predicted_West.png")
 ```
 
@@ -2004,25 +1644,21 @@ knitr::kable(
 Using the original fixed neighbour links, SAR achieves a test MAE of **`r sprintf("%.2f", sar_report_t1$MAE)`** at one hour and **`r sprintf("%.2f", sar_report_t6$MAE)`** at six hours. OLS gives **`r sprintf("%.2f", ols_report_t1$MAE)`** and **`r sprintf("%.2f", ols_report_t6$MAE)`**, respectively. SAR therefore makes slightly smaller average errors at both horizons. This suggests that including neighbouring regions helps prediction, although the improvement over OLS is small. Both models have larger errors when predicting six hours ahead.
 
 ### Forecasts Versus Observations
-
-```{r sar-forecast-plot, echo=FALSE, out.width="95%", fig.align='center', fig.cap="SAR and OLS forecasts compared with actual West-region PM2.5.", fig.pos='H'}
-knitr::include_graphics("SAR_Forecast_vs_Actual.png")
-```
-
 At one hour, SAR follows most of the rises and falls in pollution. However, it still misses some sharp peaks, especially around 23--24 October. At six hours, predictions are smoother and often react late to sudden changes. The model tends to predict below the highest peaks and above the lowest readings. The SAR and OLS lines are close together, which agrees with their similar MAEs.
 
 ### Direct and Neighbouring Prediction Changes
-
 We increased current West PM$_{2.5}$ by 10 $\mu\mathrm{g/m}^3$, kept all other inputs fixed, and recalculated the five forecasts. Because the fitted model is linear, these changes are the same at every forecast origin.
 
-```{r sar-sensitivity-plot, echo=FALSE, out.width="90%", fig.align='center', fig.cap="Prediction changes after a 10-unit increase in current West PM2.5; this is a model sensitivity check, not a physical smoke simulation.", fig.pos='H'}
-knitr::include_graphics("SAR_Prediction_Changes.png")
+```{r sar-combined-plots, echo=FALSE, fig.show="hold", out.width="40%", fig.align="center", fig.pos="H", fig.cap="SAR forecasting performance (left) and spatial sensitivity to a 10-unit increase in West $\\text{PM}_{2.5}$ (right)."}
+knitr::include_graphics(c(
+  "SAR_Forecast_vs_Actual.png",
+  "SAR_Prediction_Changes.png"
+))
 ```
 
 At one hour, West's prediction rises by `r sprintf("%.2f", sar_sensitivity_summary$West_change[1])`, exceeding the regression contribution alone (`r sprintf("%.2f", sar_sensitivity_summary$West_without_feedback[1])`) because of feedback through neighbours. East also increases by `r sprintf("%.2f", sar_sensitivity$change[sar_sensitivity$Horizon == "t+1 hr" & sar_sensitivity$region == "east"])`, despite having no direct link to West: the relationship passes through other regions. At six hours, West's change is smaller (`r sprintf("%.2f", sar_sensitivity_summary$West_change[2])`) even though rho is larger (`r sprintf("%.3f", phase5_spatial$rho[2])` versus `r sprintf("%.3f", phase5_spatial$rho[1])`). Prediction changes therefore depend on both rho and the local-pollution coefficient. These are statistical responses within the fitted model, not evidence of causal smoke transport.
 
 ### Checking the SAR Implementation
-
 We generated 100 artificial datasets, each with 200 timestamps and five regions, using the same weights, independent Gaussian errors, known $\rho=0.4$ and local-pollution coefficient $\beta_{\mathrm{PM}}=0.7$. We then fitted the unchanged estimator to each dataset.
 
 ```{r sar-simulation-table, echo=FALSE, message=FALSE, warning=FALSE}
@@ -2037,15 +1673,6 @@ knitr::kable(
 ```
 
 Mean estimates are close to the known values, with small estimation errors. This supports the implementation when its assumptions hold; it does not establish forecasting accuracy or validate the chosen neighbour links in real pollution data.
-
-## Conformal Coverage
-The nominal 95% prediction interval contained 256 of 264 hourly West-region observations, giving 96.97% observed coverage. Its half-width was 12.02 $\mu\mathrm{g/m}^3$, corresponding to a full width of 24.04 $\mu\mathrm{g/m}^3$.
-
-Thus, most observations fell within the interval, although its width indicates substantial uncertainty even one hour ahead. For example, a point forecast of 25 $\mu\mathrm{g/m}^3$ would have an interval of approximately 13–37 $\mu\mathrm{g/m}^3$. Coverage and width should be considered together when assessing the usefulness of these forecasts.
-
-The separate conformal refit achieved a point forecast MAE of 4.57 $\mu\mathrm{g/m}^3$. All three wind coefficients were shrunk to zero, producing the same forecasts as the pollution-lag specification for this split.
-
-The highest test observation was 46 $\mu\mathrm{g/m}^3$, below the project's proposed alert threshold of 55 $\mu\mathrm{g/m}^3$. Consequently, this holdout could not evaluate sensitivity to threshold exceedances. Further validation during more severe haze episodes is needed to assess whether the interval maintains adequate coverage under those conditions.
 
 ## Model Evaluation and Comparison
 Each model architecture is included to test a distinct aspect of short- and medium-horizon haze forecasting ($t+1\text{ hr}$ and $t+6\text{ hr}$) for West-region PM2.5 levels: Elastic Net provides regularized linear forecasting with feature shrinkage across lagged regional and fire predictors. Random Forest captures non-linear interactions and threshold effects across spatial lags, wind, and smoke-transport inputs via out-of-bag ensemble trees. SVM tests smooth margin-based non-linear mapping across kernels under purged chronological validation blocks. VARX models multi-region vector autoregression with exogenous wind and Sumatra fire/smoke drivers to trace cross-region dynamics and impulse responses. Pooled SAR explicitly incorporates simultaneous spatial dependence across Singapore's five regions through a fixed spatial weights matrix.
@@ -2105,9 +1732,7 @@ Table \ref{tab:model-comparison-table} summarises the out-of-sample Test MAE for
 
 At the $t+6\text{ hr}$ horizon, MAE increases across all model architectures as longer gaps allow unpredictable weather changes to build up over time. SVM and VARX(3) maintain the lowest MAE, outperforming SAR, Elastic Net, and Random Forest.
 
-\clearpage
 # Discussion
-
 ## Key Findings
 **Forecast performance depends on the prediction horizon.** Among the five implementations in Section 6.6, SAR has the lowest one-hour West-region MAE (`r sprintf("%.2f", sar_report_t1$MAE)`), followed by VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+1 hr"])`) and SVM (`r sprintf("%.2f", svm_report_t1$MAE)`). At six hours, SVM (`r sprintf("%.2f", svm_report_t6$MAE)`) and VARX (`r sprintf("%.2f", phase4_results$MAE[phase4_results$horizon == "t+6 hr"])`) give the lowest point estimates. Their approximately 0.01 difference is insufficient to establish a meaningful advantage without uncertainty analysis. No single model is best at both horizons.
 
@@ -2132,17 +1757,23 @@ Empirical results show that spatial and regularised linear frameworks achieve th
 
 In practice, combining $t+1\text{ hr}$ immediate alerts with $t+6\text{ hr}$ forecasts gives public health agencies, schools, and outdoor workers both short-notice alerts and actionable half-day lead time to prepare. Incorporating more timely satellite fire updates and uncertainty intervals in future work will further strengthen preparedness against recurring regional haze.
 
+# Declaration of AI Usage
+We used ChatGPT, Google Gemini, Claude AI to assist in preparing this document. We determined the objectives of the project, project requirements, assessment criteria, grading philosophy and examples used in the rubric. ChatGPT was used to help refine the wording, organize the material, and format the document in R Markdown.
+
 # References
-Rayda, N. (2026, September 24). ‘Fire after fire’: What Sumatra reveals about Indonesia’s recurring haze problem. CNA. https://www.channelnewsasia.com/asia/indonesia-haze-wildfires-sumatra-human-activity-crackdown-6403751
-
-Mungcal, A., Chua, C., Quendalyn, G., Duhalde, M., Xun, L. E., Begum, S., Adeline, S., Tan, W., & Sin, Y. S. (2026, October 19). The haze is back in Singapore. How does it compare with past occurrences? The Straits Times. https://www.straitstimes.com/multimedia/graphics/2026/09/singapore-haze-2026/index.html
-
 Abdullah, S., Napi, N. N. L. M., Ahmed, A. N., Mansor, W. N. W., Mansor, A. A., Ismail, M., Abdullah, A. M., & Ramly, Z. T. A. (2020). Development of Multiple Linear Regression for Particulate Matter (PM10) Forecasting during Episodic Transboundary Haze Event in Malaysia. Atmosphere, 11(3), 289. https://doi.org/10.3390/atmos11030289
-
-Palanichamy, N., Haw, S. C., S, S., Murugan, R., & Govindasamy, K. (2022). Machine learning methods to predict particulate matter PM 2.5. F1000Research, 11, 406. https://doi.org/10.12688/f1000research.73166.1
-
-Breiman, L. (2001). Random forests. Machine Learning, 45(1), 5–32. https://doi.org/10.1023/A:1010933404324
 
 Bivand, R., & Piras, G. (2015). Comparing implementations of estimation methods for spatial econometrics. Journal of Statistical Software, 63(18). https://doi.org/10.18637/jss.v063.i18
 
+Breiman, L. (2001). Random forests. Machine Learning, 45(1), 5–32. https://doi.org/10.1023/A:1010933404324
+
+Meteorological Service Singapore (2020), Annual Climate Assessment Report 2019.
+https://www.weather.gov.sg/wp-content/uploads/2020/03/Annual-Climate-Assessment-Report-2019.pdf?utm_source=chatgpt.com
+
+Mungcal, A., Chua, C., Quendalyn, G., Duhalde, M., Xun, L. E., Begum, S., Adeline, S., Tan, W., & Sin, Y. S. (2026, October 19). The haze is back in Singapore. How does it compare with past occurrences? The Straits Times. https://www.straitstimes.com/multimedia/graphics/2026/09/singapore-haze-2026/index.html
+
 National Environment Agency. (n.d.). Frequently asked questions on air pollution. https://www.nea.gov.sg/our-services/pollution-control/air-pollution/faqs
+
+Palanichamy, N., Haw, S. C., S, S., Murugan, R., & Govindasamy, K. (2022). Machine learning methods to predict particulate matter PM 2.5. F1000Research, 11, 406. https://doi.org/10.12688/f1000research.73166.1
+
+Rayda, N. (2026, September 24). ‘Fire after fire’: What Sumatra reveals about Indonesia’s recurring haze problem. CNA. https://www.channelnewsasia.com/asia/indonesia-haze-wildfires-sumatra-human-activity-crackdown-6403751
