@@ -91,20 +91,19 @@ master_haze_2019 <- pm25_raw %>%
     daily_frp_Sumatra = 0, daily_frp_Kalimantan = 0,
     daily_count_Sumatra = 0, daily_count_Kalimantan = 0
   )) %>%
-  # Create physics-based advection interaction term: Southerly wind * Sumatra Fire Power
+  # interaction term: Southerly wind * Sumatra Fire Power
   mutate(
     smoke_transport_Sumatra = pmax(0, wind_w) * daily_frp_Sumatra
   ) %>%
   arrange(Timestamp)
 
-# Check final structure of your clean master data frame
 dim(master_haze_2019)
 head(master_haze_2019)
 
 
 
 # ==============================================================================
-# PART 1: DATA PREPROCESSING (TIMESTAMP CORRECTION) & EDA
+# PART 1: DATA PREPROCESSING & EDA
 # ==============================================================================
 # A. Convert wide regional data to long format for EDA time-series plotting
 long_data <- master_haze_2019 %>%
@@ -127,7 +126,7 @@ eda_plot <- ggplot(data = long_data, aes(x = Timestamp, y = PM25, group = locati
   theme_minimal()
 print(eda_plot)
 ggsave("EDA_plot.png", plot = eda_plot, width = 5, height = 3, dpi = 300)
-# Create a clean summary table for regional PM2.5 concentrations
+# summary table for regional PM2.5 concentrations
 regional_summary <- long_data %>% 
   group_by(location) %>% 
   summarise(
@@ -173,7 +172,7 @@ eda_drivers_plot <- ggplot(eda_drivers_df, aes(x = Timestamp, y = Value)) +
 
 print(eda_drivers_plot)
 # ==============================================================================
-# PART 2: PHASE 2 - ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
+# PART 2: ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
 # ==============================================================================
 
 split_date <- ymd("2019-10-21")
@@ -189,7 +188,7 @@ lagged_obs <- function(df, L) {
                      .names = "Lag_{col}_{L}"))
 }
 
-# Function to run Elastic Net for any forecast horizon h (t+1 and t+6)
+# t+1 and t+6
 fit_elastic_net_horizon <- function(h, seed = 42) {
   
   cat(sprintf("\n========================================\n"))
@@ -234,7 +233,6 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
     preProcess = c("scale")
   )
   
-  # Print tuning summary and best hyperparameters found via cross-validation
   print(elastic_net_model)
   print(elastic_net_model$bestTune)
   
@@ -259,7 +257,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   en_coefs <- coef(elastic_net_model$finalModel, s = best_lambda)
   print(en_coefs)
   
-  # F. Visualisation: Coefficient Paths across Lambda (Lab 4 Style)
+  # F. Visualisation: Coefficient Paths across Lambda 
   lambda_for_plotting <- 10^seq(from = -2, to = 2, length = 100)
   
   en_path_model <- glmnet(
@@ -298,7 +296,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   tibble(horizon = paste0("t+", h, " hr"), model = "Elastic Net", MAE = test_mae)
 }
 
-# Run Elastic Net for both t+1 and t+6 horizons
+
 horizons <- c(1, 6)
 elastic_net_results <- map_dfr(horizons, fit_elastic_net_horizon)
 
