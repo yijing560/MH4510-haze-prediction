@@ -91,19 +91,20 @@ master_haze_2019 <- pm25_raw %>%
     daily_frp_Sumatra = 0, daily_frp_Kalimantan = 0,
     daily_count_Sumatra = 0, daily_count_Kalimantan = 0
   )) %>%
-  # interaction term: Southerly wind * Sumatra Fire Power
+  # Create physics-based advection interaction term: Southerly wind * Sumatra Fire Power
   mutate(
     smoke_transport_Sumatra = pmax(0, wind_w) * daily_frp_Sumatra
   ) %>%
   arrange(Timestamp)
 
+# Check final structure of your clean master data frame
 dim(master_haze_2019)
 head(master_haze_2019)
 
 
 
 # ==============================================================================
-# PART 1: DATA PREPROCESSING & EDA
+# PART 1: DATA PREPROCESSING (TIMESTAMP CORRECTION) & EDA
 # ==============================================================================
 # A. Convert wide regional data to long format for EDA time-series plotting
 long_data <- master_haze_2019 %>%
@@ -126,7 +127,7 @@ eda_plot <- ggplot(data = long_data, aes(x = Timestamp, y = PM25, group = locati
   theme_minimal()
 print(eda_plot)
 ggsave("EDA_plot.png", plot = eda_plot, width = 5, height = 3, dpi = 300)
-# summary table for regional PM2.5 concentrations
+# Create a clean summary table for regional PM2.5 concentrations
 regional_summary <- long_data %>% 
   group_by(location) %>% 
   summarise(
@@ -172,7 +173,7 @@ eda_drivers_plot <- ggplot(eda_drivers_df, aes(x = Timestamp, y = Value)) +
 
 print(eda_drivers_plot)
 # ==============================================================================
-# PART 2: ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
+# PART 2: PHASE 2 - ELASTIC NET MODEL (t+1 and t+6 Horizons, MAE Metric)
 # ==============================================================================
 
 split_date <- ymd("2019-10-21")
@@ -188,7 +189,7 @@ lagged_obs <- function(df, L) {
                      .names = "Lag_{col}_{L}"))
 }
 
-# t+1 and t+6
+# Function to run Elastic Net for any forecast horizon h (t+1 and t+6)
 fit_elastic_net_horizon <- function(h, seed = 42) {
   
   cat(sprintf("\n========================================\n"))
@@ -233,6 +234,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
     preProcess = c("scale")
   )
   
+  # Print tuning summary and best hyperparameters found via cross-validation
   print(elastic_net_model)
   print(elastic_net_model$bestTune)
   
@@ -257,7 +259,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   en_coefs <- coef(elastic_net_model$finalModel, s = best_lambda)
   print(en_coefs)
   
-  # F. Visualisation: Coefficient Paths across Lambda 
+  # F. Visualisation: Coefficient Paths across Lambda (Lab 4 Style)
   lambda_for_plotting <- 10^seq(from = -2, to = 2, length = 100)
   
   en_path_model <- glmnet(
@@ -296,7 +298,7 @@ fit_elastic_net_horizon <- function(h, seed = 42) {
   tibble(horizon = paste0("t+", h, " hr"), model = "Elastic Net", MAE = test_mae)
 }
 
-
+# Run Elastic Net for both t+1 and t+6 horizons
 horizons <- c(1, 6)
 elastic_net_results <- map_dfr(horizons, fit_elastic_net_horizon)
 
@@ -1162,345 +1164,3 @@ saveRDS(mget(c("long_data","regional_summary", "driver_summary", "model_t1", "mo
                "phase5_spatial", "phase5_forecasts", "sar_sensitivity",
                "sar_sensitivity_summary", "sar_simulation_summary")),
         "Report_Analysis_Outputs.rds")
-# ==============================================================================
-# CONFORMAL COVERAGE
-# One-hour-ahead West-region PM2.5 prediction intervals
-# ==============================================================================
-
-run_conformal_coverage <- function(haze) {
-
-  # 1. Check and align the hourly data
-  regions <- c("north", "south", "east", "west", "central")
-  wind <- c("wind_u", "wind_w", "mean_wind_spd")
-  required <- c("Timestamp", regions, wind)
-
-  if (!all(required %in% names(haze))) {
-    stop(
-      "Missing columns: ",
-      paste(setdiff(required, names(haze)), collapse = ", ")
-    )
-  }
-
-  timestamp <- as.POSIXct(
-    haze$Timestamp,
-    tz = "UTC",
-    origin = "1970-01-01"
-  )
-
-  if (anyDuplicated(timestamp[!is.na(timestamp)])) {
-    stop("Expected at most one row per hour.")
-  }
-
-  # Match the timestamp convention used by the group's preprocessing.
-  # A complete hourly grid preserves lag alignment if observations are missing.
-  hours <- seq(
-    as.POSIXct("2019-08-01 00:00:00", tz = "UTC"),
-    as.POSIXct("2019-10-31 23:00:00", tz = "UTC"),
-    by = "hour"
-  )
-
-  rows <- match(hours, timestamp)
-
-  observations <- as.matrix(
-    as.data.frame(haze)[rows, c(regions, wind)]
-  )
-
-  storage.mode(observations) <- "double"
-
-  # 2. Construct predictors available before each target hour
-  lag_hours <- function(x, n) {
-    lagged <- rbind(
-      matrix(NA_real_, n, ncol(x)),
-      head(x, -n)
-    )
-
-    colnames(lagged) <- paste0(colnames(x), "_lag", n)
-    lagged
-  }
-
-  region_lags <- lapply(
-    1:5,
-    function(n) lag_hours(observations[, regions], n)
-  )
-
-  wind_lags <- lag_hours(observations[, wind], 1)
-
-  # Complete same-day fire totals may contain detections after forecast issuance.
-  x <- do.call(cbind, c(region_lags, list(wind_lags)))
-  y <- observations[, "west"]
-
-  usable <- is.finite(y) & rowSums(!is.finite(x)) == 0L
-
-  # 3. Separate fitting, calibration and test periods by target timestamp
-  fit <- which(
-    usable &
-      hours < as.POSIXct("2019-10-11", tz = "UTC")
-  )
-
-  calibration <- which(
-    usable &
-      hours >= as.POSIXct("2019-10-11", tz = "UTC") &
-      hours < as.POSIXct("2019-10-21", tz = "UTC")
-  )
-
-  test <- which(
-    usable &
-      hours >= as.POSIXct("2019-10-21", tz = "UTC")
-  )
-
-  if (
-    length(fit) < 100L ||
-    length(calibration) < 19L ||
-    length(test) < 2L
-  ) {
-    stop("Too few usable hours in a fitting, calibration or test period.")
-  }
-
-  # 4. Fit Elastic Net using base R
-  # Objective:
-  # RSS / (2 * n) + penalty *
-  # (mix * sum(abs(beta)) + (1 - mix) * sum(beta^2) / 2)
-  fit_model <- function(indices, mix, penalty) {
-
-    design <- x[indices, , drop = FALSE]
-    n <- nrow(design)
-
-    # Estimate scaling parameters using only this fitting window.
-    center <- colMeans(design)
-    z <- sweep(design, 2L, center, "-")
-
-    scale <- sqrt(colMeans(z^2))
-    scale[scale == 0] <- 1
-
-    z <- sweep(z, 2L, scale, "/")
-
-    intercept <- mean(y[indices])
-    gram <- crossprod(z) / n
-
-    correlation <- drop(
-      crossprod(z, y[indices] - intercept)
-    ) / n
-
-    if (mix == 0) {
-
-      beta <- drop(
-        solve(
-          gram + diag(penalty, ncol(z)),
-          correlation
-        )
-      )
-
-    } else {
-
-      beta <- numeric(ncol(z))
-      curvature <- diag(gram) + penalty * (1 - mix)
-
-      for (iteration in seq_len(50000L)) {
-
-        previous <- beta
-
-        for (j in seq_along(beta)) {
-
-          if (curvature[j] == 0) {
-            next
-          }
-
-          partial <- correlation[j] -
-            sum(gram[j, ] * beta) +
-            gram[j, j] * beta[j]
-
-          beta[j] <- sign(partial) *
-            max(abs(partial) - penalty * mix, 0) /
-            curvature[j]
-        }
-
-        change <- max(abs(beta - previous))
-        tolerance <- 1e-9 * max(1, abs(beta))
-
-        if (change <= tolerance) {
-          break
-        }
-      }
-
-      if (iteration == 50000L) {
-        stop("Elastic Net did not converge.")
-      }
-    }
-
-    list(
-      center = center,
-      scale = scale,
-      intercept = intercept,
-      beta = setNames(beta, colnames(x))
-    )
-  }
-
-  predict_rows <- function(model, indices) {
-
-    z <- sweep(
-      x[indices, , drop = FALSE],
-      2L,
-      model$center,
-      "-"
-    )
-
-    z <- sweep(z, 2L, model$scale, "/")
-
-    model$intercept + drop(z %*% model$beta)
-  }
-
-  # 5. Tune using expanding fitting windows and 24-hour validation blocks
-  fold_starts <- seq.int(
-    floor(0.7 * length(fit)),
-    length(fit) - 24L,
-    by = 24L
-  )
-
-  grid <- expand.grid(
-    penalty = 10^seq(-2, 2, length.out = 5L),
-    mix = seq(0, 1, length.out = 5L)
-  )
-
-  validation_rmse <- function(mix, penalty) {
-
-    scores <- vapply(
-      fold_starts,
-      function(start) {
-
-        model <- fit_model(
-          fit[seq_len(start)],
-          mix,
-          penalty
-        )
-
-        validate <- fit[start + seq_len(24L)]
-
-        errors <- y[validate] -
-          predict_rows(model, validate)
-
-        sqrt(mean(errors^2))
-      },
-      numeric(1L)
-    )
-
-    mean(scores)
-  }
-
-  scores <- mapply(
-    validation_rmse,
-    grid$mix,
-    grid$penalty
-  )
-
-  best <- grid[which.min(scores), ]
-
-  model <- fit_model(
-    fit,
-    best$mix,
-    best$penalty
-  )
-
-  # 6. Calibrate a nominal 95% prediction interval
-  calibration_predictions <- predict_rows(
-    model,
-    calibration
-  )
-
-  residuals <- sort(
-    abs(y[calibration] - calibration_predictions)
-  )
-
-  rank <- ceiling(
-    0.95 * (length(residuals) + 1L)
-  )
-
-  half_width <- residuals[rank]
-
-  # 7. Evaluate the fixed interval on the untouched holdout
-  forecast <- predict_rows(model, test)
-  observed <- y[test]
-  error <- observed - forecast
-
-  lower <- forecast - half_width
-  upper <- forecast + half_width
-  covered <- abs(error) <= half_width
-
-  metrics <- data.frame(
-    fit_n = length(fit),
-    calibration_n = length(calibration),
-    test_n = length(test),
-    mixing_parameter = best$mix,
-    penalty = best$penalty,
-    nominal_coverage_pct = 95,
-    covered_n = sum(covered),
-    observed_coverage_pct = 100 * mean(covered),
-    interval_half_width = half_width,
-    interval_width = 2 * half_width,
-    RMSE = sqrt(mean(error^2)),
-    MAE = mean(abs(error)),
-    R2 = 1 - sum(error^2) /
-      sum((observed - mean(observed))^2)
-  )
-
-  forecasts <- data.frame(
-    timestamp = hours[test],
-    observed_pm25_ug_m3 = observed,
-    forecast_pm25_ug_m3 = forecast,
-    lower_95_ug_m3 = lower,
-    upper_95_ug_m3 = upper,
-    covered = covered
-  )
-
-  # 8. Evaluate the project's proposed alert threshold
-  threshold <- 55
-
-  alert_metrics <- function(prediction) {
-
-    missed <- sum(
-      observed > threshold &
-        prediction <= threshold
-    )
-
-    false_alarms <- sum(
-      observed <= threshold &
-        prediction > threshold
-    )
-
-    c(
-      missed = missed,
-      false_alarms = false_alarms,
-      cost = 5 * missed + false_alarms
-    )
-  }
-
-  alerts <- rbind(
-    Elastic_Net = alert_metrics(forecast),
-    Persistence = alert_metrics(x[test, "west_lag1"])
-  )
-
-  # 9. Print and return the results
-  print(metrics, row.names = FALSE)
-
-  cat("\nWind coefficients:\n")
-  print(model$beta[colnames(wind_lags)])
-
-  cat(
-    "\nHoldout maximum:", max(observed),
-    "| Hours above 55:", sum(observed > threshold),
-    "\n"
-  )
-
-  print(alerts)
-
-  invisible(
-    list(
-      metrics = metrics,
-      forecasts = forecasts,
-      alerts = alerts,
-      wind_coefficients = model$beta[colnames(wind_lags)]
-    )
-  )
-}
-
-# Run the conformal analysis using the group's cleaned data.
-conformal <- run_conformal_coverage(master_haze_2019)
